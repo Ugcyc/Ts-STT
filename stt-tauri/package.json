@@ -7,11 +7,15 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && tauri",
-    "tauri:release": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && set \"CMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG\" && set \"CMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG\" && set \"CMAKE_C_FLAGS_RELWITHDEBINFO=/O2 /Ob2 /DNDEBUG\" && set \"CMAKE_CXX_FLAGS_RELWITHDEBINFO=/O2 /Ob2 /DNDEBUG\" && set \"GGML_NATIVE=ON\" && set \"GGML_AVX=ON\" && set \"GGML_AVX2=ON\" && set \"GGML_FMA=ON\" && set \"GGML_F16C=ON\" && tauri",
-    "build:tauri": "npm run tauri:release build",
-    "build:win:nsis": "npm run tauri:release build -- --bundles nsis",
-    "build:win:msi": "npm run tauri:release build -- --bundles msi"
+    "tauri": "tauri",
+    "tauri:release": "tauri",
+    "tauri:win": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && tauri",
+    "tauri:release:win": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && set \"CMAKE_C_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG\" && set \"CMAKE_CXX_FLAGS_RELEASE=/O2 /Ob2 /DNDEBUG\" && set \"CMAKE_C_FLAGS_RELWITHDEBINFO=/O2 /Ob2 /DNDEBUG\" && set \"CMAKE_CXX_FLAGS_RELWITHDEBINFO=/O2 /Ob2 /DNDEBUG\" && set \"GGML_NATIVE=ON\" && set \"GGML_AVX=ON\" && set \"GGML_AVX2=ON\" && set \"GGML_FMA=ON\" && set \"GGML_F16C=ON\" && tauri",
+    "build:tauri": "npm run tauri:release -- build",
+    "build:mac": "MACOSX_DEPLOYMENT_TARGET=11.0 CMAKE_OSX_DEPLOYMENT_TARGET=11.0 npm run tauri:release -- build --bundles app,dmg",
+    "build:linux": "npm run tauri:release -- build --bundles deb,appimage,rpm",
+    "build:win:nsis": "npm run tauri:release:win -- build --bundles nsis",
+    "build:win:msi": "npm run tauri:release:win -- build --bundles msi"
   },
   "dependencies": {
     "react": "^19.1.0",

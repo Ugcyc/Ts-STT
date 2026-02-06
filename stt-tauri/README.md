@@ -25,10 +25,10 @@ Local desktop speech-to-text app (no Python service).
 
 ## Dev Run
 
-```powershell
+```bash
 cd stt-tauri
 npm install
-npm run tauri dev
+npm run tauri -- dev
 ```
 
 ## Build Commands
@@ -36,13 +36,13 @@ npm run tauri dev
 Run from `stt-tauri/`.
 
 - Build app + bundles for current OS:
-```powershell
-npm run tauri build
+```bash
+npm run build:tauri
 ```
 
 - Windows NSIS installer (`.exe`):
 ```powershell
-npm run tauri build -- --bundles nsis
+npm run build:win:nsis
 ```
 
 - Windows raw app executable only (no installer):
@@ -52,17 +52,18 @@ cargo build --release --manifest-path src-tauri/Cargo.toml
 
 - Windows MSI installer (requires WiX toolset):
 ```powershell
-npm run tauri build -- --bundles msi
+npm run build:win:msi
 ```
 
-- macOS bundles (run on macOS):
+- macOS bundles (run on macOS, Metal enabled for `whisper-rs`):
 ```bash
-npm run tauri build -- --bundles app,dmg
+npm run build:mac
 ```
+This script sets `MACOSX_DEPLOYMENT_TARGET=11.0` to avoid `std::filesystem` build errors from `whisper-rs-sys`.
 
 - Linux bundles (run on Linux):
 ```bash
-npm run tauri build -- --bundles deb,appimage,rpm
+npm run build:linux
 ```
 
 ## Build Outputs

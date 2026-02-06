@@ -1,4 +1,4 @@
-﻿import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import {
@@ -357,7 +357,10 @@ function App() {
   return (
     <main className={`app-shell ${settingsOpen ? "expanded" : "compact"} theme-${theme}`}>
       {!settingsOpen ? (
-        <section className={`capsule ${capsuleTone}`} data-tauri-drag-region>
+        <section
+          className={`capsule ${capsuleTone}`}
+          data-tauri-drag-region
+        >
           <button className="mic-button" onClick={isRecording ? handleStop : handleStart} disabled={busy}>
             <svg
               className="mic-icon"
@@ -373,7 +376,7 @@ function App() {
               <line x1="12" y1="19" x2="12" y2="22"></line>
             </svg>
           </button>
-          <span className="status-text">{compactText}</span>
+          <span className="status-text" data-tauri-drag-region>{compactText}</span>
           <button
             className="capsule-settings"
             onClick={() => setSettingsOpen(true)}

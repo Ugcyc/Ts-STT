@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>T&apos;s STT needs microphone access to capture your speech for local transcription.</string>
+  <key>NSAppleEventsUsageDescription</key>
+  <string>T&apos;s STT uses System Events to paste transcribed text into the active app when paste mode is enabled.</string>
+</dict>
+</plist>
