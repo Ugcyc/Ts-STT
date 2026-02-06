@@ -1,0 +1,21 @@
+# Virtual environments
+.venv/
+venv/
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Model caches and temp
+*.log
+*.tmp
+.cache/
+
+# Tauri frontend/native build artifacts
+stt-tauri/node_modules/
+stt-tauri/dist/
+stt-tauri/src-tauri/target/
+stt-tauri/src-tauri/target-check*/
+stt-tauri/src-tauri/temp-check/
