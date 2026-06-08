@@ -1,7 +1,7 @@
 import tkinter as tk
 from queue import Queue
 from threading import Thread
-from tkinter import ttk
+from tkinter import messagebox, ttk
 from typing import Callable, Optional, Sequence
 import ctypes
 
@@ -382,11 +382,11 @@ class SettingsWindow:
         cfg = self.cfg_manager.config
         self.window = tk.Toplevel(self.root)
         self.window.title("Settings")
-        w, h = 420, 880
+        w, h = 420, 760
         self.window.geometry(f"{w}x{h}")
         self.window.configure(bg=PALETTE["bg"])
         self.window.overrideredirect(True)
-        self.window.minsize(w, h)
+        self.window.minsize(w, 620)
         self.window.config(
             bd=0,
             relief="flat",
@@ -400,29 +400,10 @@ class SettingsWindow:
 
         TitleBar(self.window, "Settings", self.window.destroy, on_minimize=lambda: minimize_window(self.window))
 
-        container = tk.Frame(self.window, bg=PALETTE["bg"])
-        container.pack(fill="both", expand=True, padx=20, pady=14)
-
-        # --- INPUT FIELDS ---
-        self._hotkey = self._add_entry(container, "Hotkey", cfg.hotkey)
-        self._mode = self._add_combo(container, "Mode", ["push_to_talk", "toggle"], cfg.mode)
-        self._output_mode = self._add_combo(container, "Output", ["type", "clipboard", "paste"], cfg.output_mode)
-        self._model_size = self._add_combo(container, "Model", ["tiny", "base", "small", "medium", "large"], cfg.model_size)
-        self._language = self._add_entry(container, "Language", cfg.language)
-        self._mic_device = self._add_combo(container, "Microphone", self._mic_choices(), cfg.mic_device or "")
-
-        # --- CHECKBOXES ---
-        chk_frame = tk.Frame(container, bg=PALETTE["bg"])
-        chk_frame.pack(fill="x", pady=10)
-        self._spoken_punct = tk.BooleanVar(value=cfg.spoken_punctuation)
-        self._auto_paste = tk.BooleanVar(value=cfg.auto_paste_clipboard)
-
-        self._make_checkbox(chk_frame, "Parse spoken punctuation", self._spoken_punct)
-        self._make_checkbox(chk_frame, "Auto-paste from clipboard", self._auto_paste)
-
-        # --- BOTTOM ACTIONS ---
+        # Pack actions before the form so they always retain space when the
+        # settings window is shorter than the full form.
         btn_frame = tk.Frame(self.window, bg=PALETTE["bg"])
-        btn_frame.pack(side="bottom", fill="x", padx=20, pady=(0, 18))
+        btn_frame.pack(side="bottom", fill="x", padx=20, pady=(8, 18))
 
         ResizeGrip(btn_frame, self.window).pack(side="right", anchor="se")
 
@@ -430,6 +411,41 @@ class SettingsWindow:
                      bg=PALETTE["accent"], hover_bg=PALETTE["accent_hover"], fg="#0f172a", width=10).pack(side="right", padx=8)
         ModernButton(btn_frame, "Cancel", self.window.destroy,
                      bg=PALETTE["card"], hover_bg=PALETTE["border"], width=8).pack(side="right", padx=8)
+
+        container = tk.Frame(self.window, bg=PALETTE["bg"])
+        container.pack(fill="both", expand=True, padx=20, pady=14)
+
+        # --- INPUT FIELDS ---
+        self._hotkey = self._add_entry(container, "Hotkey", cfg.hotkey)
+        self._mode = self._add_combo(container, "Mode", ["push_to_talk", "toggle"], cfg.mode)
+        self._output_mode = self._add_combo(container, "Output", ["type", "clipboard", "paste"], cfg.output_mode)
+        self._stt_backend = self._add_combo(
+            container,
+            "STT backend",
+            ["whisper", "nemotron"],
+            cfg.stt_backend,
+        )
+        self._model_size = self._add_combo(container, "Whisper model", ["tiny", "base", "small", "medium", "large"], cfg.model_size)
+        self._language = self._add_entry(container, "Whisper language", cfg.language)
+        self._nemotron_target_lang = self._add_entry(container, "Nemotron target language", cfg.nemotron_target_lang)
+        self._nemotron_latency_ms = self._add_combo(
+            container,
+            "Nemotron ONNX latency (fixed)",
+            ["560"],
+            str(cfg.nemotron_latency_ms),
+        )
+        self._mic_device = self._add_combo(container, "Microphone", self._mic_choices(), cfg.mic_device or "")
+
+        # --- CHECKBOXES ---
+        chk_frame = tk.Frame(container, bg=PALETTE["bg"])
+        chk_frame.pack(fill="x", pady=10)
+        self._spoken_punct = tk.BooleanVar(value=cfg.spoken_punctuation)
+        self._auto_paste = tk.BooleanVar(value=cfg.auto_paste_clipboard)
+        self._live_typing = tk.BooleanVar(value=cfg.live_typing)
+
+        self._make_checkbox(chk_frame, "Type Nemotron transcript while speaking", self._live_typing)
+        self._make_checkbox(chk_frame, "Parse spoken punctuation", self._spoken_punct)
+        self._make_checkbox(chk_frame, "Auto-paste from clipboard", self._auto_paste)
 
     def _make_checkbox(self, parent, text, var):
         cb = tk.Checkbutton(parent, text=text, variable=var,
@@ -471,15 +487,29 @@ class SettingsWindow:
             "hotkey": self._hotkey.get(),
             "mode": self._mode.get(),
             "output_mode": self._output_mode.get(),
+            "stt_backend": self._stt_backend.get(),
             "model_size": self._model_size.get(),
             "language": self._language.get(),
+            "nemotron_target_lang": self._nemotron_target_lang.get(),
+            "nemotron_latency_ms": int(self._nemotron_latency_ms.get()),
             "mic_device": self._mic_device.get() or None,
+            "live_typing": self._live_typing.get(),
             "spoken_punctuation": self._spoken_punct.get(),
             "auto_paste_clipboard": self._auto_paste.get(),
         }
         self.cfg_manager.update(**cfg)
         if self.on_saved:
-            self.on_saved()
+            try:
+                self.on_saved()
+            except Exception as exc:  # noqa: BLE001
+                reverted = self.cfg_manager.load()
+                self._stt_backend.set(reverted.stt_backend)
+                messagebox.showerror(
+                    "Could not load STT backend",
+                    f"{exc}\n\nThe backend was reverted to {reverted.stt_backend}.",
+                    parent=self.window,
+                )
+                return
         self.window.destroy()
 
 

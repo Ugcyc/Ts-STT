@@ -1,5 +1,6 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import {
   isRegistered,
@@ -10,14 +11,16 @@ import "./App.css";
 
 type AppConfig = {
   hotkey: string;
+  mode: string;
   theme: string;
   output_mode: string;
   mic_device: string | null;
-  model_size: string;
   language: string;
+  streaming: boolean;
+  live_typing: boolean;
+  live_update_ms: number;
   spoken_punctuation: boolean;
   silence_timeout_secs: number;
-  model_idle_unload_secs: number;
   log_transcripts: boolean;
   model_path: string | null;
 };
@@ -43,16 +46,28 @@ type ToggleResponse = {
   note: string | null;
 };
 
+type DownloadProgress = {
+  stage: "downloading" | "skipped" | "extracting" | "complete";
+  item: string;
+  itemIndex: number;
+  itemCount: number;
+  bytesDownloaded: number;
+  bytesTotal: number | null;
+  message: string;
+};
+
 const defaultConfig: AppConfig = {
   hotkey: "CommandOrControl+Shift+Space",
+  mode: "toggle",
   theme: "dark",
-  output_mode: "clipboard",
+  output_mode: "paste",
   mic_device: null,
-  model_size: "base",
-  language: "en",
-  spoken_punctuation: true,
+  language: "en-US",
+  streaming: true,
+  live_typing: false,
+  live_update_ms: 560,
+  spoken_punctuation: false,
   silence_timeout_secs: 60,
-  model_idle_unload_secs: 300,
   log_transcripts: false,
   model_path: null,
 };
@@ -94,6 +109,13 @@ function hotkeyCandidates(input: string): string[] {
   return [...new Set([normalized, lower, ctrlVariant, raw].filter(Boolean))];
 }
 
+function formatBytes(bytes: number): string {
+  if (!bytes) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  return `${(bytes / 1024 ** unit).toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
+}
+
 function App() {
   const MINI_SIZE = new LogicalSize(210, 58);
   const EXPANDED_SIZE = new LogicalSize(820, 700);
@@ -110,6 +132,8 @@ function App() {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
+  const [showAdvanced, setShowAdvanced] = useState(false);
 
   const hotkeyInFlight = useRef(false);
   const isRecordingRef = useRef(false);
@@ -137,8 +161,16 @@ function App() {
 
   useEffect(() => {
     void loadInitial();
+    let unlisten: (() => void) | undefined;
+    void listen<DownloadProgress>("download-progress", (event) => {
+      setDownloadProgress(event.payload);
+      setInfo(event.payload.message);
+    }).then((stopListening) => {
+      unlisten = stopListening;
+    });
     return () => {
       void unregisterAll();
+      unlisten?.();
     };
   }, []);
 
@@ -309,15 +341,16 @@ function App() {
   const handleDownloadModel = async () => {
     setBusy(true);
     setError(null);
-    setInfo("Downloading model...");
+    setDownloadProgress(null);
+    setInfo("Preparing Nemotron download...");
     try {
       const path = await invoke<string>("download_model");
       setModelExists(true);
       setConfig((prev) => ({ ...prev, model_path: path }));
-      setInfo("Model downloaded.");
+      setInfo("Nemotron is installed and ready.");
     } catch (err) {
       setError(String(err));
-      setInfo(null);
+      setInfo("Download stopped. Click Repair Nemotron to resume.");
     } finally {
       setBusy(false);
     }
@@ -353,6 +386,10 @@ function App() {
       ? "Transcribing"
       : "Ready";
   const theme = config.theme === "light" ? "light" : "dark";
+  const itemPercent =
+    downloadProgress?.bytesTotal && downloadProgress.bytesTotal > 0
+      ? Math.min(100, (downloadProgress.bytesDownloaded / downloadProgress.bytesTotal) * 100)
+      : null;
 
   return (
     <main className={`app-shell ${settingsOpen ? "expanded" : "compact"} theme-${theme}`}>
@@ -440,12 +477,36 @@ function App() {
 
           {info && <p className="info">{info}</p>}
           {error && <p className="error">{error}</p>}
+          {downloadProgress && downloadProgress.stage !== "complete" && (
+            <section className="download-progress" aria-live="polite">
+              <div className="download-progress-head">
+                <strong>{downloadProgress.message}</strong>
+                <span>
+                  File {downloadProgress.itemIndex} of {downloadProgress.itemCount}
+                </span>
+              </div>
+              <div className={`progress-track ${itemPercent === null ? "indeterminate" : ""}`}>
+                <span style={itemPercent === null ? undefined : { width: `${itemPercent}%` }} />
+              </div>
+              <div className="download-progress-detail">
+                <span>{downloadProgress.item}</span>
+                {downloadProgress.bytesTotal ? (
+                  <span>
+                    {formatBytes(downloadProgress.bytesDownloaded)} /{" "}
+                    {formatBytes(downloadProgress.bytesTotal)}
+                  </span>
+                ) : (
+                  <span>{downloadProgress.stage}</span>
+                )}
+              </div>
+            </section>
+          )}
 
           <section className="settings-panel">
             <div className="settings-head">
               <div className="settings-head-text">
                 <h2>Settings</h2>
-                <p>Fine-tune hotkey, model, and microphone behavior.</p>
+                <p>Configure Nemotron streaming, output, and microphone behavior.</p>
               </div>
               <button className="ghost-btn" onClick={handleCopyPerfLogs} disabled={busy}>
                 Copy Perf Logs
@@ -470,35 +531,97 @@ function App() {
                 >
                   <option value="clipboard">clipboard</option>
                   <option value="paste">paste</option>
+                  <option value="type">type</option>
                 </select>
               </label>
 
-              <label>
-                Model
-                <div className="field-inline">
-                  <select
-                    value={config.model_size}
-                    onChange={(e) => updateConfig("model_size", e.currentTarget.value)}
-                  >
-                    <option value="tiny">tiny</option>
-                    <option value="base">base</option>
-                    <option value="small">small</option>
-                    <option value="medium">medium</option>
-                    <option value="large">large-v3</option>
-                  </select>
+              <label className="full-span model-card">
+                <span className="model-card-title">Speech Model</span>
+                <div className="model-card-row">
+                  <div>
+                    <strong>Nemotron 3.5 ASR Streaming</strong>
+                    <small className="field-hint">
+                      Local 0.6B ONNX Runtime GenAI model
+                    </small>
+                  </div>
                   <button className="field-action" onClick={handleDownloadModel} disabled={busy}>
-                    Download
+                    {busy && downloadProgress
+                      ? "Downloading..."
+                      : modelExists
+                        ? "Repair Nemotron"
+                        : "Download Nemotron"}
                   </button>
+                </div>
+                <span className={`model-state ${modelExists ? "ready" : "missing"}`}>
+                  {modelExists ? "Installed and ready" : "Not installed"}
+                </span>
+                <div className="model-facts">
+                  <span>Quantization: INT4</span>
+                  <span>Native inference chunk: 560 ms</span>
                 </div>
               </label>
 
               <label>
                 Language
-                <input
+                <select
                   value={config.language}
                   onChange={(e) => updateConfig("language", e.currentTarget.value)}
-                  placeholder="en"
-                />
+                >
+                  <option value="en-US">English (US)</option>
+                  <option value="en-GB">English (UK)</option>
+                  <option value="auto">Auto detect</option>
+                  <option value="fr">French</option>
+                  <option value="es">Spanish</option>
+                  <option value="de">German</option>
+                  <option value="pt">Portuguese</option>
+                  <option value="it">Italian</option>
+                  <option value="ja">Japanese</option>
+                  <option value="ko">Korean</option>
+                  <option value="zh-CN">Chinese (Simplified)</option>
+                </select>
+              </label>
+
+              <label>
+                Streaming
+                <select
+                  value={config.streaming ? "enabled" : "disabled"}
+                  onChange={(e) =>
+                    updateConfig("streaming", e.currentTarget.value === "enabled")
+                  }
+                >
+                  <option value="enabled">enabled</option>
+                  <option value="disabled">disabled</option>
+                </select>
+                <small className="field-hint">Processes 560ms audio chunks while you speak</small>
+              </label>
+
+              <label>
+                Live Typing
+                <select
+                  value={config.live_typing ? "enabled" : "disabled"}
+                  onChange={(e) => updateConfig("live_typing", e.currentTarget.value === "enabled")}
+                  disabled={config.output_mode !== "type" || !config.streaming}
+                >
+                  <option value="disabled">disabled</option>
+                  <option value="enabled">enabled</option>
+                </select>
+                <small className="field-hint">Requires Output = type and Streaming = enabled</small>
+              </label>
+
+              <label>
+                Live Typing Responsiveness
+                <select
+                  value={config.live_update_ms}
+                  onChange={(e) => updateConfig("live_update_ms", Number(e.currentTarget.value))}
+                  disabled={config.output_mode !== "type" || !config.streaming || !config.live_typing}
+                >
+                  <option value={560}>Fast - every 560 ms</option>
+                  <option value={1120}>Balanced - every 1120 ms</option>
+                  <option value={1680}>Stable - every 1680 ms</option>
+                </select>
+                <small className="field-hint">
+                  Faster text appears sooner; stable mode makes fewer visible corrections
+                </small>
               </label>
 
               <label>
@@ -509,24 +632,9 @@ function App() {
                     updateConfig("spoken_punctuation", e.currentTarget.value === "enabled")
                   }
                 >
-                  <option value="enabled">enabled</option>
                   <option value="disabled">disabled</option>
+                  <option value="enabled">enabled</option>
                 </select>
-              </label>
-
-              <label>
-                Model Idle Unload (sec)
-                <input
-                  type="number"
-                  min={0}
-                  step={30}
-                  value={config.model_idle_unload_secs}
-                  onChange={(e) => {
-                    const value = Number(e.currentTarget.value);
-                    updateConfig("model_idle_unload_secs", Number.isFinite(value) ? value : 300);
-                  }}
-                />
-                <small className="field-hint">0 = unload immediately after transcription</small>
               </label>
 
               <label className="full-span">
@@ -554,24 +662,32 @@ function App() {
                 </div>
               </label>
 
-              <label className="full-span">
-                Model Path
-                <input
-                  value={config.model_path ?? ""}
-                  onChange={(e) => {
-                    const value = e.currentTarget.value;
-                    updateConfig("model_path", value.length ? value : null);
-                  }}
-                  placeholder="C:\\models\\ggml-base.bin"
-                />
-                <small className="field-hint">Optional custom local model file path</small>
-              </label>
+              {showAdvanced && (
+                <label className="full-span">
+                  Custom Model Directory
+                  <input
+                    value={config.model_path ?? ""}
+                    onChange={(e) => {
+                      const value = e.currentTarget.value;
+                      updateConfig("model_path", value.length ? value : null);
+                    }}
+                    placeholder="Leave empty to use the managed Nemotron download"
+                  />
+                  <small className="field-hint">Advanced: custom Nemotron ONNX model directory</small>
+                </label>
+              )}
             </div>
 
             <div className="paths settings-block">
               <div>
-                <strong>Mode:</strong> toggle (only supported mode)
+                <strong>Backend:</strong> Nemotron 3.5 ASR Streaming ONNX INT4
               </div>
+              <div>
+                <strong>App version:</strong> 0.3.2
+              </div>
+              <button className="advanced-toggle" onClick={() => setShowAdvanced((value) => !value)}>
+                {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
+              </button>
             </div>
 
             <section className="transcript settings-block">

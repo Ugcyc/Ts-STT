@@ -20,6 +20,11 @@ def main():
         model_size=cfg.model_size,
         language=cfg.language,
         prefer_gpu=cfg.prefer_gpu,
+        backend=cfg.stt_backend,
+        nemotron_model_name=cfg.nemotron_model_name,
+        nemotron_target_lang=cfg.nemotron_target_lang,
+        nemotron_latency_ms=cfg.nemotron_latency_ms,
+        nemotron_strip_language_tags=cfg.nemotron_strip_language_tags,
     )
     result = engine.transcribe(data, sample_rate=capturer.sample_rate)
     processed = TextPostProcessor(enable_spoken_punctuation=cfg.spoken_punctuation).process(result.final_text)

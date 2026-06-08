@@ -1,8 +1,8 @@
 [package]
 name = "stt-tauri"
-version = "0.2.0"
-description = "A Tauri App"
-authors = ["you"]
+version = "0.3.2"
+description = "Local Nemotron streaming speech-to-text desktop app"
+authors = ["Tarek"]
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -27,7 +27,7 @@ arboard = "3.6.1"
 cpal = "0.15.3"
 directories = "5.0.1"
 enigo = "0.1.3"
-num_cpus = "1.17.0"
+libloading = "0.8"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["blocking", "rustls-tls"] }
-whisper-rs = "0.14.2"
+zip = "2"

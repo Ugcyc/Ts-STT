@@ -29,6 +29,7 @@ class AudioCapture:
         silence_timeout: Optional[float] = 60.0,
         silence_threshold: float = 0.015,
         on_silence: Optional[Callable[[], None]] = None,
+        on_audio: Optional[Callable[[np.ndarray], None]] = None,
     ):
         self.device = device
         self.sample_rate = sample_rate
@@ -37,6 +38,7 @@ class AudioCapture:
         self.silence_timeout = silence_timeout
         self.silence_threshold = silence_threshold
         self.on_silence = on_silence
+        self.on_audio = on_audio
 
         self._stream: Optional[sd.InputStream] = None
         self._queue: Queue[np.ndarray] = Queue()
@@ -106,6 +108,8 @@ class AudioCapture:
         if status:
             logger.debug("Audio stream status: %s", status)
         self._queue.put(indata.copy())
+        if self.on_audio:
+            self.on_audio(indata.copy())
         rms = float(np.sqrt(np.mean(np.square(indata))))
         if rms > self.silence_threshold:
             self._last_voice_time = time.time()

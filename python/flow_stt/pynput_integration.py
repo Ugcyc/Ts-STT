@@ -70,6 +70,12 @@ class PynputIntegration:
         else:
             self.type_text(text)
 
+    def replace_typed_suffix(self, remove_count: int, text: str) -> None:
+        for _ in range(remove_count):
+            self._controller.press(keyboard.Key.backspace)
+            self._controller.release(keyboard.Key.backspace)
+        self.type_text(text)
+
     # Hotkeys
     def register_hotkey_toggle(self, hotkey: str, on_toggle: Callable[[], None]) -> None:
         pattern = self._to_pynput_hotkey(hotkey)

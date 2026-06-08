@@ -41,6 +41,11 @@ class WindowsIntegration:
         else:
             self.type_text(text)
 
+    def replace_typed_suffix(self, remove_count: int, text: str) -> None:
+        for _ in range(remove_count):
+            keyboard.send("backspace")
+        self.type_text(text)
+
     def register_hotkey_push_to_talk(
         self, hotkey: str, on_press: Callable[[], None], on_release: Callable[[], None]
     ) -> None:

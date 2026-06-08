@@ -1,48 +1,32 @@
-# Ts-STT
+# T's STT
 
-Speech-to-text project with two local implementations:
+Local, streaming speech-to-text powered by NVIDIA Nemotron 3.5 ASR.
 
-- `python/`: Flow-style Windows dictation app using `faster-whisper`.
-- `stt-tauri/`: Tauri desktop app (React + Rust) using `whisper-rs`.
+The project contains:
 
-## Repository Layout
+- `stt-tauri/`: the production Windows desktop app built with React, Rust, and
+  Tauri.
+- `python/`: the original prototype and a useful test harness for experiments.
 
-```text
-.
-|- python/
-|- stt-tauri/
-`- .gitignore
-```
+## Current Release
+
+Tauri app version: **0.3.2**
+
+The production app is fully local after its first model/runtime download. It
+uses the INT4 ONNX export of Nemotron 3.5 ASR Streaming and types, pastes, or
+copies transcripts into other applications.
+
+Highlights:
+
+- Native Rust streaming inference with no Python service
+- English US by default, with multilingual locale selection
+- Optional live typing with configurable responsiveness
+- Visible model/runtime download progress with repair support
+- Automatic private ONNX Runtime installation to avoid Windows DLL conflicts
 
 ## Quick Start
 
-### Python App (`python/`)
-
-Requirements:
-- Python 3.11+
-
-Commands:
-
-```powershell
-cd python
-pip install -r requirements.txt
-python -m flow_stt
-```
-
-Alternative run command:
-
-```powershell
-python app.py
-```
-
-### Tauri App (`stt-tauri/`)
-
-Requirements:
-- Node.js + npm
-- Rust toolchain (`cargo`)
-- Tauri prerequisites for Windows
-
-Commands:
+### Run The Production App
 
 ```powershell
 cd stt-tauri
@@ -50,16 +34,35 @@ npm install
 npm run tauri dev
 ```
 
-## Build
+Open Settings and click **Download Nemotron** on first run.
 
-From `stt-tauri/`:
+### Build The Windows Installer
 
 ```powershell
-npm run tauri build
+cd stt-tauri
+npm run build:win:nsis
 ```
 
-## Notes
+The installer is written under:
 
-- Both apps are local-first STT workflows.
-- See `python/README.md` for Flow STT details.
-- See `stt-tauri/README.md` for Tauri app details and build variants.
+```text
+%LOCALAPPDATA%\stt-tauri-target\x86_64-pc-windows-msvc\release\bundle\nsis\
+```
+
+See [stt-tauri/README.md](stt-tauri/README.md) for setup, architecture,
+troubleshooting, and build details.
+
+## Python Test App
+
+```powershell
+cd python
+.\.venv\Scripts\python.exe -m flow_stt
+```
+
+See [python/README.md](python/README.md) for Python setup details.
+
+## Project Notes
+
+- [CHANGELOG.md](CHANGELOG.md) records completed releases.
+- [ROADMAP.md](ROADMAP.md) collects likely future work without committing to a
+  specific schedule.

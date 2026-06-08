@@ -9,8 +9,14 @@ DEFAULT_CONFIG = {
     "mode": "push_to_talk",  # or "toggle"
     "output_mode": "type",  # or "clipboard" or "paste"
     "mic_device": None,
+    "stt_backend": "nemotron",
     "model_size": "small",
     "language": "en",
+    "nemotron_model_name": "onnx-community/nemotron-3.5-asr-streaming-0.6b-onnx-int4",
+    "nemotron_target_lang": "en-US",
+    "nemotron_latency_ms": 560,
+    "nemotron_strip_language_tags": True,
+    "live_typing": True,
     "spoken_punctuation": True,
     "auto_paste_clipboard": False,
     "silence_timeout_secs": 60.0,  # Stop after long silence; hotkey release still stops immediately.
@@ -33,8 +39,14 @@ class Config:
     mode: str
     output_mode: str
     mic_device: Optional[str]
+    stt_backend: str
     model_size: str
     language: str
+    nemotron_model_name: str
+    nemotron_target_lang: str
+    nemotron_latency_ms: int
+    nemotron_strip_language_tags: bool
+    live_typing: bool
     spoken_punctuation: bool
     auto_paste_clipboard: bool
     silence_timeout_secs: Optional[float]
@@ -74,6 +86,11 @@ class ConfigManager:
         # Migrate old default (1.8s) to the new longer timeout.
         if data.get("silence_timeout_secs") == 1.8:
             data["silence_timeout_secs"] = DEFAULT_CONFIG["silence_timeout_secs"]
+        # Migrate the original NeMo backend settings to the native Windows ONNX runtime.
+        if data.get("nemotron_model_name") == "nvidia/nemotron-3.5-asr-streaming-0.6b":
+            data["nemotron_model_name"] = DEFAULT_CONFIG["nemotron_model_name"]
+        if data.get("nemotron_latency_ms") != 560:
+            data["nemotron_latency_ms"] = DEFAULT_CONFIG["nemotron_latency_ms"]
         return Config.from_dict(data, self.path)
 
     def save(self, config: Optional[Config] = None) -> None:
