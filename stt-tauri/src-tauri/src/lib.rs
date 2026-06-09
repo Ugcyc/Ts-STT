@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
     sync::{mpsc, Mutex},
     thread,
-    time::Instant,
+    time::{Duration, Instant},
 };
 
 use arboard::Clipboard;
@@ -51,6 +51,8 @@ struct AppConfig {
     streaming: bool,
     live_typing: bool,
     live_update_ms: u32,
+    key_delay_ms: u32,
+    model_keep: String,
     spoken_punctuation: bool,
     silence_timeout_secs: f32,
     log_transcripts: bool,
@@ -69,6 +71,8 @@ impl Default for AppConfig {
             streaming: true,
             live_typing: false,
             live_update_ms: 560,
+            key_delay_ms: 0,
+            model_keep: "always".to_string(),
             spoken_punctuation: false,
             silence_timeout_secs: 60.0,
             log_transcripts: false,
@@ -121,6 +125,8 @@ enum ModelCommand {
         streaming: bool,
         live_typing: bool,
         live_update_ms: u32,
+        key_delay_ms: u32,
+        keep_alive: Option<Duration>,
         response: mpsc::Sender<Result<(), String>>,
     },
     Audio {
@@ -152,6 +158,8 @@ impl ModelHandle {
         streaming: bool,
         live_typing: bool,
         live_update_ms: u32,
+        key_delay_ms: u32,
+        keep_alive: Option<Duration>,
     ) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.tx
@@ -162,6 +170,8 @@ impl ModelHandle {
                 streaming,
                 live_typing,
                 live_update_ms,
+                key_delay_ms,
+                keep_alive,
                 response: tx,
             })
             .map_err(|_| "Nemotron worker is unavailable.".to_string())?;
@@ -243,8 +253,31 @@ fn model_worker(rx: mpsc::Receiver<ModelCommand>) {
     let mut live_typer: Option<LiveTyper> = None;
     let mut live_update_samples = 8_960usize;
     let mut samples_since_live_update = 0usize;
+    let mut keep_alive: Option<Duration> = None;
+    let mut last_used = Instant::now();
+    let mut start_error: Option<String> = None;
 
-    while let Ok(command) = rx.recv() {
+    loop {
+        let idle_with_model = cached.is_some() && session.is_none();
+        let command = match (idle_with_model, keep_alive) {
+            (true, Some(timeout)) => {
+                let deadline = last_used + timeout;
+                let now = Instant::now();
+                if now >= deadline {
+                    cached = None;
+                    continue;
+                }
+                match rx.recv_timeout(deadline - now) {
+                    Ok(command) => command,
+                    Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                    Err(mpsc::RecvTimeoutError::Disconnected) => return,
+                }
+            }
+            _ => match rx.recv() {
+                Ok(command) => command,
+                Err(_) => return,
+            },
+        };
         match command {
             ModelCommand::Start {
                 model_path,
@@ -253,17 +286,33 @@ fn model_worker(rx: mpsc::Receiver<ModelCommand>) {
                 streaming: use_streaming,
                 live_typing,
                 live_update_ms,
+                key_delay_ms,
+                keep_alive: keep,
                 response,
             } => {
+                if language_id(&language).is_none() {
+                    let _ = response.send(Err(format!("Unsupported Nemotron language: {language}")));
+                    continue;
+                }
+                // Acknowledge before loading so recording starts right away;
+                // audio queues in the channel while the model loads.
+                let _ = response.send(Ok(()));
+                session = None;
+                start_error = None;
+                resampler = StreamingResampler::new();
+                delayed_audio.clear();
+                streaming = use_streaming;
+                live_typer = live_typing.then(|| LiveTyper::new(key_delay_ms));
+                live_update_samples = (live_update_ms as usize * 16).max(8_960);
+                samples_since_live_update = 0;
+                keep_alive = keep;
+                let reload = cached
+                    .as_ref()
+                    .map(|(m, r, _)| m != &model_path || r != &runtime_dll)
+                    .unwrap_or(true);
                 let result = (|| {
-                    if language_id(&language).is_none() {
-                        return Err(format!("Unsupported Nemotron language: {language}"));
-                    }
-                    let reload = cached
-                        .as_ref()
-                        .map(|(m, r, _)| m != &model_path || r != &runtime_dll)
-                        .unwrap_or(true);
                     if reload {
+                        cached = None;
                         cached = Some((
                             model_path.clone(),
                             runtime_dll.clone(),
@@ -271,16 +320,16 @@ fn model_worker(rx: mpsc::Receiver<ModelCommand>) {
                         ));
                     }
                     let model = &cached.as_ref().expect("model was just loaded").2;
-                    session = Some(model.start_session(&language)?);
-                    resampler = StreamingResampler::new();
-                    delayed_audio.clear();
-                    streaming = use_streaming;
-                    live_typer = live_typing.then(LiveTyper::new);
-                    live_update_samples = (live_update_ms as usize * 16).max(8_960);
-                    samples_since_live_update = 0;
-                    Ok(())
+                    model.start_session(&language)
                 })();
-                let _ = response.send(result);
+                match result {
+                    Ok(new_session) => session = Some(new_session),
+                    Err(err) => {
+                        eprintln!("Nemotron load error: {err}");
+                        start_error = Some(err);
+                    }
+                }
+                last_used = Instant::now();
             }
             ModelCommand::Audio {
                 samples,
@@ -311,6 +360,9 @@ fn model_worker(rx: mpsc::Receiver<ModelCommand>) {
             }
             ModelCommand::Finish { response } => {
                 let result = (|| {
+                    if let Some(err) = start_error.take() {
+                        return Err(err);
+                    }
                     let active = session
                         .as_mut()
                         .ok_or_else(|| "No Nemotron session is active.".to_string())?;
@@ -321,25 +373,40 @@ fn model_worker(rx: mpsc::Receiver<ModelCommand>) {
                     if let Some(typer) = live_typer.as_mut() {
                         typer.update(&text);
                     }
-                    session = None;
-                    delayed_audio.clear();
-                    live_typer = None;
                     Ok(text)
                 })();
+                session = None;
+                delayed_audio.clear();
+                live_typer = None;
+                last_used = Instant::now();
                 let _ = response.send(result);
             }
         }
     }
 }
 
+fn type_text(enigo: &mut Enigo, text: &str, key_delay_ms: u32) {
+    if key_delay_ms == 0 {
+        enigo.key_sequence(text);
+        return;
+    }
+    let mut buffer = [0u8; 4];
+    for ch in text.chars() {
+        enigo.key_sequence(ch.encode_utf8(&mut buffer));
+        thread::sleep(Duration::from_millis(key_delay_ms as u64));
+    }
+}
+
 struct LiveTyper {
     typed: String,
+    key_delay_ms: u32,
 }
 
 impl LiveTyper {
-    fn new() -> Self {
+    fn new(key_delay_ms: u32) -> Self {
         Self {
             typed: String::new(),
+            key_delay_ms,
         }
     }
 
@@ -360,7 +427,7 @@ impl LiveTyper {
             enigo.key_click(Key::Backspace);
         }
         if !replacement.is_empty() {
-            enigo.key_sequence(&replacement);
+            type_text(&mut enigo, &replacement, self.key_delay_ms);
         }
         self.typed = text.to_string();
     }
@@ -616,6 +683,12 @@ fn normalize_config(mut config: AppConfig) -> AppConfig {
     }
     if !matches!(config.live_update_ms, 560 | 1120 | 1680) {
         config.live_update_ms = 560;
+    }
+    if !matches!(config.key_delay_ms, 0 | 8 | 16 | 32) {
+        config.key_delay_ms = 0;
+    }
+    if !matches!(config.model_keep.as_str(), "always" | "5min" | "15min" | "after_use") {
+        config.model_keep = "always".to_string();
     }
     if config
         .model_path
@@ -946,7 +1019,7 @@ fn output_text(config: &AppConfig, text: &str) -> Result<(), String> {
         "clipboard" => set_clipboard(text),
         "type" => {
             if !config.live_typing {
-                Enigo::new().key_sequence(text);
+                type_text(&mut Enigo::new(), text, config.key_delay_ms);
             }
             Ok(())
         }
@@ -974,6 +1047,12 @@ fn start_inner(state: &AppState, device_name: Option<String>) -> Result<(), Stri
             "Nemotron is not installed. Open Settings and click Download Nemotron.".to_string(),
         );
     }
+    let keep_alive = match config.model_keep.as_str() {
+        "after_use" => Some(Duration::ZERO),
+        "5min" => Some(Duration::from_secs(300)),
+        "15min" => Some(Duration::from_secs(900)),
+        _ => None,
+    };
     set_status(state, "Loading Nemotron");
     state.model.start(
         model_path,
@@ -982,6 +1061,8 @@ fn start_inner(state: &AppState, device_name: Option<String>) -> Result<(), Stri
         config.streaming,
         config.live_typing && config.output_mode == "type",
         config.live_update_ms,
+        config.key_delay_ms,
+        keep_alive,
     )?;
     state
         .recorder
@@ -1143,12 +1224,14 @@ fn copy_performance_report(state: State<'_, AppState>) -> Result<String, String>
         .clone();
     let model_path = resolve_model_path(&config, &state.model_dir);
     let report = format!(
-        "T's STT\nbackend=Nemotron 3.5 ASR ONNX INT4\nstatus={}\nlanguage={}\nstreaming={}\nlive_typing={}\nlive_update_ms={}\nmodel_path={}\nruntime={}\ninstalled={}",
+        "T's STT\nbackend=Nemotron 3.5 ASR ONNX INT4\nstatus={}\nlanguage={}\nstreaming={}\nlive_typing={}\nlive_update_ms={}\nkey_delay_ms={}\nmodel_keep={}\nmodel_path={}\nruntime={}\ninstalled={}",
         status(&state),
         config.language,
         config.streaming,
         config.live_typing,
         config.live_update_ms,
+        config.key_delay_ms,
+        config.model_keep,
         model_path.display(),
         runtime_dll(&state.runtime_dir).display(),
         installation_exists(&model_path, &runtime_dll(&state.runtime_dir)),

@@ -19,6 +19,8 @@ type AppConfig = {
   streaming: boolean;
   live_typing: boolean;
   live_update_ms: number;
+  key_delay_ms: number;
+  model_keep: string;
   spoken_punctuation: boolean;
   silence_timeout_secs: number;
   log_transcripts: boolean;
@@ -66,6 +68,8 @@ const defaultConfig: AppConfig = {
   streaming: true,
   live_typing: false,
   live_update_ms: 560,
+  key_delay_ms: 0,
+  model_keep: "always",
   spoken_punctuation: false,
   silence_timeout_secs: 60,
   log_transcripts: false,
@@ -116,6 +120,57 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** unit).toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
 }
 
+function prettyHotkey(hotkey: string): string {
+  return hotkey
+    .split("+")
+    .map((part) => (part === "CommandOrControl" ? "Ctrl" : part))
+    .join(" + ");
+}
+
+function Toggle({
+  checked,
+  onChange,
+  disabled,
+  label,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  disabled?: boolean;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      className={`toggle ${checked ? "on" : ""}`}
+      onClick={() => onChange(!checked)}
+      disabled={disabled}
+    >
+      <span className="toggle-knob" />
+    </button>
+  );
+}
+
+const OUTPUT_MODES = [
+  {
+    value: "paste",
+    label: "Paste",
+    desc: "Pastes the transcript into the active app when you stop.",
+  },
+  {
+    value: "type",
+    label: "Type",
+    desc: "Types the words out key by key — allows live typing while you speak.",
+  },
+  {
+    value: "clipboard",
+    label: "Clipboard",
+    desc: "Only copies the transcript, so you can paste it yourself.",
+  },
+];
+
 function App() {
   const MINI_SIZE = new LogicalSize(210, 58);
   const EXPANDED_SIZE = new LogicalSize(820, 700);
@@ -134,6 +189,8 @@ function App() {
   const [info, setInfo] = useState<string | null>(null);
   const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [savedConfig, setSavedConfig] = useState<AppConfig>(defaultConfig);
+  const [capturingHotkey, setCapturingHotkey] = useState(false);
 
   const hotkeyInFlight = useRef(false);
   const isRecordingRef = useRef(false);
@@ -148,6 +205,7 @@ function App() {
     try {
       const data = await invoke<InitialData>("get_initial_data");
       setConfig(data.config);
+      setSavedConfig(data.config);
       setDevices(data.input_devices.length ? data.input_devices : ["Default"]);
       setStatus(data.status);
       setModelExists(data.model_exists);
@@ -316,6 +374,7 @@ function App() {
     try {
       const saved = await invoke<AppConfig>("save_config", { config });
       setConfig(saved);
+      setSavedConfig(saved);
       await registerHotkey(saved.hotkey);
       setInfo("Settings saved.");
     } catch (err) {
@@ -373,6 +432,37 @@ function App() {
   const updateConfig = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
+
+  const handleHotkeyCapture = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === "Escape") {
+      e.currentTarget.blur();
+      return;
+    }
+    // Wait until a non-modifier key completes the combination.
+    if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+
+    const mods: string[] = [];
+    if (e.ctrlKey || e.metaKey) mods.push("CommandOrControl");
+    if (e.shiftKey) mods.push("Shift");
+    if (e.altKey) mods.push("Alt");
+
+    const isFunctionKey = /^F\d{1,2}$/.test(e.key);
+    if (!mods.length && !isFunctionKey) {
+      setInfo("Include a modifier key (Ctrl, Shift, or Alt) in the shortcut.");
+      return;
+    }
+
+    const main = e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    updateConfig("hotkey", [...mods, main].join("+"));
+    setInfo(null);
+    e.currentTarget.blur();
+  };
+
+  const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
+  const liveTypingAvailable = config.output_mode === "type" && config.streaming;
+  const outputModeDesc = OUTPUT_MODES.find((m) => m.value === config.output_mode)?.desc;
 
   const lower = status.toLowerCase();
   const capsuleTone = lower.includes("listen")
@@ -445,8 +535,12 @@ function App() {
               >
                 {config.theme === "light" ? "Dark Mode" : "Light Mode"}
               </button>
-              <button className="ghost-btn primary" onClick={handleSaveConfig} disabled={busy}>
-                Save
+              <button
+                className={`ghost-btn primary ${dirty ? "attention" : ""}`}
+                onClick={handleSaveConfig}
+                disabled={busy || !dirty}
+              >
+                {dirty ? "Save changes" : "Saved"}
               </button>
               <button className="ghost-btn" onClick={() => setSettingsOpen(false)} disabled={busy}>
                 Close
@@ -503,143 +597,43 @@ function App() {
           )}
 
           <section className="settings-panel">
-            <div className="settings-head">
-              <div className="settings-head-text">
-                <h2>Settings</h2>
-                <p>Configure Nemotron streaming, output, and microphone behavior.</p>
-              </div>
-              <button className="ghost-btn" onClick={handleCopyPerfLogs} disabled={busy}>
-                Copy Perf Logs
-              </button>
-            </div>
+            <section className="settings-group">
+              <h3 className="settings-group-title">Recording</h3>
 
-            <div className="form-grid">
-              <label>
-                Hotkey
-                <input
-                  value={config.hotkey}
-                  onChange={(e) => updateConfig("hotkey", e.currentTarget.value)}
-                  placeholder="CommandOrControl+Shift+Space"
-                />
-              </label>
-
-              <label>
-                Output
-                <select
-                  value={config.output_mode}
-                  onChange={(e) => updateConfig("output_mode", e.currentTarget.value)}
-                >
-                  <option value="clipboard">clipboard</option>
-                  <option value="paste">paste</option>
-                  <option value="type">type</option>
-                </select>
-              </label>
-
-              <label className="full-span model-card">
-                <span className="model-card-title">Speech Model</span>
-                <div className="model-card-row">
-                  <div>
-                    <strong>Nemotron 3.5 ASR Streaming</strong>
-                    <small className="field-hint">
-                      Local 0.6B ONNX Runtime GenAI model
-                    </small>
-                  </div>
-                  <button className="field-action" onClick={handleDownloadModel} disabled={busy}>
-                    {busy && downloadProgress
-                      ? "Downloading..."
-                      : modelExists
-                        ? "Repair Nemotron"
-                        : "Download Nemotron"}
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Keyboard shortcut</span>
+                  <span className="setting-desc">
+                    {capturingHotkey
+                      ? "Press the new key combination, or Esc to cancel"
+                      : "Starts and stops recording from any app"}
+                  </span>
+                </div>
+                <div className="setting-control">
+                  <input
+                    className={`hotkey-input ${capturingHotkey ? "capturing" : ""}`}
+                    value={capturingHotkey ? "Press keys..." : prettyHotkey(config.hotkey)}
+                    onKeyDown={handleHotkeyCapture}
+                    onFocus={() => setCapturingHotkey(true)}
+                    onBlur={() => setCapturingHotkey(false)}
+                    readOnly
+                  />
+                  <button
+                    className="field-action"
+                    onClick={() => updateConfig("hotkey", defaultConfig.hotkey)}
+                    disabled={busy}
+                  >
+                    Reset
                   </button>
                 </div>
-                <span className={`model-state ${modelExists ? "ready" : "missing"}`}>
-                  {modelExists ? "Installed and ready" : "Not installed"}
-                </span>
-                <div className="model-facts">
-                  <span>Quantization: INT4</span>
-                  <span>Native inference chunk: 560 ms</span>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Microphone</span>
+                  <span className="setting-desc">Input device used for recording</span>
                 </div>
-              </label>
-
-              <label>
-                Language
-                <select
-                  value={config.language}
-                  onChange={(e) => updateConfig("language", e.currentTarget.value)}
-                >
-                  <option value="en-US">English (US)</option>
-                  <option value="en-GB">English (UK)</option>
-                  <option value="auto">Auto detect</option>
-                  <option value="fr">French</option>
-                  <option value="es">Spanish</option>
-                  <option value="de">German</option>
-                  <option value="pt">Portuguese</option>
-                  <option value="it">Italian</option>
-                  <option value="ja">Japanese</option>
-                  <option value="ko">Korean</option>
-                  <option value="zh-CN">Chinese (Simplified)</option>
-                </select>
-              </label>
-
-              <label>
-                Streaming
-                <select
-                  value={config.streaming ? "enabled" : "disabled"}
-                  onChange={(e) =>
-                    updateConfig("streaming", e.currentTarget.value === "enabled")
-                  }
-                >
-                  <option value="enabled">enabled</option>
-                  <option value="disabled">disabled</option>
-                </select>
-                <small className="field-hint">Processes 560ms audio chunks while you speak</small>
-              </label>
-
-              <label>
-                Live Typing
-                <select
-                  value={config.live_typing ? "enabled" : "disabled"}
-                  onChange={(e) => updateConfig("live_typing", e.currentTarget.value === "enabled")}
-                  disabled={config.output_mode !== "type" || !config.streaming}
-                >
-                  <option value="disabled">disabled</option>
-                  <option value="enabled">enabled</option>
-                </select>
-                <small className="field-hint">Requires Output = type and Streaming = enabled</small>
-              </label>
-
-              <label>
-                Live Typing Responsiveness
-                <select
-                  value={config.live_update_ms}
-                  onChange={(e) => updateConfig("live_update_ms", Number(e.currentTarget.value))}
-                  disabled={config.output_mode !== "type" || !config.streaming || !config.live_typing}
-                >
-                  <option value={560}>Fast - every 560 ms</option>
-                  <option value={1120}>Balanced - every 1120 ms</option>
-                  <option value={1680}>Stable - every 1680 ms</option>
-                </select>
-                <small className="field-hint">
-                  Faster text appears sooner; stable mode makes fewer visible corrections
-                </small>
-              </label>
-
-              <label>
-                Spoken Punctuation
-                <select
-                  value={config.spoken_punctuation ? "enabled" : "disabled"}
-                  onChange={(e) =>
-                    updateConfig("spoken_punctuation", e.currentTarget.value === "enabled")
-                  }
-                >
-                  <option value="disabled">disabled</option>
-                  <option value="enabled">enabled</option>
-                </select>
-              </label>
-
-              <label className="full-span">
-                Microphone
-                <div className="field-inline">
+                <div className="setting-control">
                   <select
                     value={config.mic_device ?? "Default"}
                     onChange={(e) =>
@@ -660,38 +654,246 @@ function App() {
                     Refresh
                   </button>
                 </div>
-              </label>
+              </div>
+            </section>
+
+            <section className="settings-group">
+              <h3 className="settings-group-title">Speech Model</h3>
+              <div className="model-card">
+                <div className="model-card-row">
+                  <div>
+                    <strong>Nemotron 3.5 ASR Streaming</strong>
+                    <small className="field-hint">Local 0.6B ONNX Runtime GenAI model</small>
+                  </div>
+                  <button className="field-action" onClick={handleDownloadModel} disabled={busy}>
+                    {busy && downloadProgress
+                      ? "Downloading..."
+                      : modelExists
+                        ? "Repair Nemotron"
+                        : "Download Nemotron"}
+                  </button>
+                </div>
+                <span className={`model-state ${modelExists ? "ready" : "missing"}`}>
+                  {modelExists ? "Installed and ready" : "Not installed"}
+                </span>
+                <div className="model-facts">
+                  <span>Quantization: INT4</span>
+                  <span>Native inference chunk: 560 ms</span>
+                </div>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Keep model in memory</span>
+                  <span className="setting-desc">
+                    {config.model_keep === "always"
+                      ? "Fastest: the model stays loaded once it has been used"
+                      : "Frees RAM when idle; the model reloads in the background while you speak"}
+                  </span>
+                </div>
+                <select
+                  value={config.model_keep}
+                  onChange={(e) => updateConfig("model_keep", e.currentTarget.value)}
+                >
+                  <option value="always">Always (fastest)</option>
+                  <option value="15min">For 15 min after use</option>
+                  <option value="5min">For 5 min after use</option>
+                  <option value="after_use">Only while dictating</option>
+                </select>
+              </div>
+            </section>
+
+            <section className="settings-group">
+              <h3 className="settings-group-title">Output</h3>
+
+              <div className="setting-row column">
+                <div className="setting-text">
+                  <span className="setting-label">Where the text goes</span>
+                  <span className="setting-desc">{outputModeDesc}</span>
+                </div>
+                <div className="segmented" role="radiogroup" aria-label="Output mode">
+                  {OUTPUT_MODES.map((mode) => (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={config.output_mode === mode.value}
+                      className={`segment ${config.output_mode === mode.value ? "active" : ""}`}
+                      onClick={() => updateConfig("output_mode", mode.value)}
+                    >
+                      {mode.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Typing speed</span>
+                  <span className="setting-desc">
+                    {config.output_mode === "type"
+                      ? "How fast the keyboard types the words out"
+                      : 'Only used when Output is set to "Type"'}
+                  </span>
+                </div>
+                <select
+                  value={config.key_delay_ms}
+                  onChange={(e) => updateConfig("key_delay_ms", Number(e.currentTarget.value))}
+                  disabled={config.output_mode !== "type"}
+                >
+                  <option value={0}>Instant</option>
+                  <option value={8}>Fast (~120 keys/sec)</option>
+                  <option value={16}>Medium (~60 keys/sec)</option>
+                  <option value={32}>Slow (~30 keys/sec)</option>
+                </select>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Live typing</span>
+                  <span className="setting-desc">
+                    {liveTypingAvailable
+                      ? "Type words on screen while you speak"
+                      : 'Needs Output set to "Type" and Streaming turned on'}
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.live_typing && liveTypingAvailable}
+                  onChange={(value) => updateConfig("live_typing", value)}
+                  disabled={!liveTypingAvailable}
+                  label="Live typing"
+                />
+              </div>
+
+              {config.live_typing && liveTypingAvailable && (
+                <div className="setting-row">
+                  <div className="setting-text">
+                    <span className="setting-label">Typing delay</span>
+                    <span className="setting-desc">
+                      How long to wait before new words appear; longer delays make fewer
+                      visible corrections
+                    </span>
+                  </div>
+                  <select
+                    value={config.live_update_ms}
+                    onChange={(e) => updateConfig("live_update_ms", Number(e.currentTarget.value))}
+                  >
+                    <option value={560}>Short (560 ms)</option>
+                    <option value={1120}>Medium (1120 ms)</option>
+                    <option value={1680}>Long (1680 ms)</option>
+                  </select>
+                </div>
+              )}
+            </section>
+
+            <section className="settings-group">
+              <h3 className="settings-group-title">Transcription</h3>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Language</span>
+                  <span className="setting-desc">Language you will be speaking</span>
+                </div>
+                <select
+                  value={config.language}
+                  onChange={(e) => updateConfig("language", e.currentTarget.value)}
+                >
+                  <option value="en-US">English (US)</option>
+                  <option value="en-GB">English (UK)</option>
+                  <option value="auto">Auto detect</option>
+                  <option value="fr">French</option>
+                  <option value="es">Spanish</option>
+                  <option value="de">German</option>
+                  <option value="pt">Portuguese</option>
+                  <option value="it">Italian</option>
+                  <option value="ja">Japanese</option>
+                  <option value="ko">Korean</option>
+                  <option value="zh-CN">Chinese (Simplified)</option>
+                </select>
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Streaming</span>
+                  <span className="setting-desc">
+                    Transcribe in 560 ms chunks while you speak instead of all at once
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.streaming}
+                  onChange={(value) => updateConfig("streaming", value)}
+                  label="Streaming"
+                />
+              </div>
+
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Spoken punctuation</span>
+                  <span className="setting-desc">
+                    Say "comma" or "period" to insert punctuation
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.spoken_punctuation}
+                  onChange={(value) => updateConfig("spoken_punctuation", value)}
+                  label="Spoken punctuation"
+                />
+              </div>
+            </section>
+
+            <section className="settings-group">
+              <button
+                className="advanced-toggle"
+                onClick={() => setShowAdvanced((value) => !value)}
+              >
+                {showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+              </button>
 
               {showAdvanced && (
-                <label className="full-span">
-                  Custom Model Directory
-                  <input
-                    value={config.model_path ?? ""}
-                    onChange={(e) => {
-                      const value = e.currentTarget.value;
-                      updateConfig("model_path", value.length ? value : null);
-                    }}
-                    placeholder="Leave empty to use the managed Nemotron download"
-                  />
-                  <small className="field-hint">Advanced: custom Nemotron ONNX model directory</small>
-                </label>
+                <>
+                  <div className="setting-row column">
+                    <div className="setting-text">
+                      <span className="setting-label">Custom model directory</span>
+                      <span className="setting-desc">
+                        Leave empty to use the managed Nemotron download
+                      </span>
+                    </div>
+                    <input
+                      value={config.model_path ?? ""}
+                      onChange={(e) => {
+                        const value = e.currentTarget.value;
+                        updateConfig("model_path", value.length ? value : null);
+                      }}
+                      placeholder="C:\path\to\nemotron-onnx"
+                    />
+                  </div>
+
+                  <div className="setting-row">
+                    <div className="setting-text">
+                      <span className="setting-label">Performance report</span>
+                      <span className="setting-desc">
+                        Copies timing logs to the clipboard for troubleshooting
+                      </span>
+                    </div>
+                    <button className="field-action" onClick={handleCopyPerfLogs} disabled={busy}>
+                      Copy
+                    </button>
+                  </div>
+
+                  <div className="paths">
+                    <div>
+                      <strong>Backend:</strong> Nemotron 3.5 ASR Streaming ONNX INT4
+                    </div>
+                    <div>
+                      <strong>App version:</strong> 0.4.0
+                    </div>
+                  </div>
+                </>
               )}
-            </div>
+            </section>
 
-            <div className="paths settings-block">
-              <div>
-                <strong>Backend:</strong> Nemotron 3.5 ASR Streaming ONNX INT4
-              </div>
-              <div>
-                <strong>App version:</strong> 0.3.2
-              </div>
-              <button className="advanced-toggle" onClick={() => setShowAdvanced((value) => !value)}>
-                {showAdvanced ? "Hide Advanced Settings" : "Show Advanced Settings"}
-              </button>
-            </div>
-
-            <section className="transcript settings-block">
-              <h2>Transcript</h2>
+            <section className="transcript settings-group">
+              <h3 className="settings-group-title">Last Transcript</h3>
               <h3>Final</h3>
               <pre>{finalText || "(empty)"}</pre>
               <h3>Raw</h3>

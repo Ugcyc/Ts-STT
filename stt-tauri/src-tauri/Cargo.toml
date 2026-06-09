@@ -1,6 +1,6 @@
-[package]
+﻿[package]
 name = "stt-tauri"
-version = "0.3.2"
+version = "0.4.0"
 description = "Local Nemotron streaming speech-to-text desktop app"
 authors = ["Tarek"]
 edition = "2021"

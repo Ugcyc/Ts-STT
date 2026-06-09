@@ -2,7 +2,7 @@
 
 The production Windows desktop app for local Nemotron streaming dictation.
 
-Current version: **0.3.2**
+Current version: **0.4.0**
 
 ## Features
 

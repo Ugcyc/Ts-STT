@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.0
+
+- Redesign the settings menu into grouped sections with toggle switches, a
+  press-to-record hotkey capture, and a segmented output-mode picker.
+- Show unsaved-changes state on the Save button.
+- Rename live typing responsiveness to Typing delay.
+- Add a Typing speed option controlling how fast keystrokes are sent
+  (Instant, Fast, Medium, Slow).
+- Add a Keep model in memory option (Always, 15 min, 5 min, Only while
+  dictating) that unloads Nemotron from RAM when idle.
+- Start recording immediately while the model loads in the background.
+- Improve compact capsule contrast on light backgrounds with text/icon
+  shadows and an outline ring.
+
 ## 0.3.2
 
 - Install matching ONNX Runtime `1.24.1` beside ONNX Runtime GenAI.

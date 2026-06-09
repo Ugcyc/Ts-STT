@@ -239,6 +239,17 @@ body {
   color: #0b0b0b;
 }
 
+.ghost-btn.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.ghost-btn.primary.attention {
+  border-color: var(--ok);
+  background: var(--ok);
+  color: #ffffff;
+}
+
 .listen-btn {
   width: 100%;
   margin-top: 12px;
@@ -402,30 +413,6 @@ body {
   }
 }
 
-.settings-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.settings-head .ghost-btn {
-  flex-shrink: 0;
-}
-
-.settings-head h2 {
-  margin: 0;
-  font-size: 0.95rem;
-  letter-spacing: 0.02em;
-  color: #f9fafb;
-}
-
-.settings-head p {
-  margin: 4px 0 0;
-  font-size: 0.8rem;
-  color: #b8bcc2;
-}
-
 button,
 select,
 input {
@@ -468,40 +455,161 @@ select:focus {
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
 }
 
-.form-grid {
-  margin-top: 0;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.form-grid label {
-  display: grid;
-  gap: 6px;
-  font-size: 0.86rem;
-  color: #d7d9de;
+.settings-group {
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 12px;
-  padding: 10px;
+  padding: 12px;
   background: rgba(255, 255, 255, 0.03);
+  display: grid;
+  gap: 4px;
 }
 
-.form-grid label.full-span {
-  grid-column: 1 / -1;
-}
-
-.model-card {
-  gap: 9px !important;
-  border-color: rgba(96, 165, 250, 0.34) !important;
-  background: rgba(59, 130, 246, 0.07) !important;
-}
-
-.model-card-title {
-  color: #bfdbfe;
+.settings-group-title {
+  margin: 0 0 4px;
   font-size: 0.74rem;
   font-weight: 800;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: #a5b0c2;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 7px 0;
+}
+
+.setting-row + .setting-row {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.setting-row.column {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.setting-text {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.setting-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.setting-desc {
+  font-size: 0.76rem;
+  color: #a1a1aa;
+}
+
+.setting-control {
+  display: flex;
+  align-items: stretch;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.setting-row select {
+  max-width: 230px;
+}
+
+.setting-row.column input {
+  width: 100%;
+}
+
+.hotkey-input {
+  min-width: 190px;
+  text-align: center;
+  font-weight: 700;
+  cursor: pointer;
+  caret-color: transparent;
+}
+
+.hotkey-input.capturing {
+  border-color: var(--live);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+  color: #93c5fd;
+}
+
+.toggle {
+  width: 44px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  position: relative;
+  flex-shrink: 0;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 50%;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #d4d4d8;
+  transform: translateY(-50%);
+  transition: left 0.2s ease, background-color 0.2s ease;
+}
+
+.toggle.on {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.toggle.on .toggle-knob {
+  left: 23px;
+  background: #ffffff;
+}
+
+.toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.segmented {
+  display: flex;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.segment {
+  flex: 1;
+  border: 0;
+  border-radius: 0;
+  padding: 9px 10px;
+  background: transparent;
+  color: #d7d9de;
+  font-size: 0.84rem;
+}
+
+.segment + .segment {
+  border-left: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+.segment.active {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0b0b0b;
+}
+
+.model-card {
+  display: grid;
+  gap: 9px;
+  border: 1px solid rgba(96, 165, 250, 0.34);
+  border-radius: 12px;
+  padding: 10px;
+  background: rgba(59, 130, 246, 0.07);
 }
 
 .model-card-row > div {
@@ -542,23 +650,9 @@ select:focus {
   font-weight: 700;
 }
 
-.checks label {
-  display: grid;
-  gap: 6px;
-  font-size: 0.86rem;
-  color: #d7d9de;
-}
-
 .field-hint {
   font-size: 0.75rem;
   color: #a1a1aa;
-}
-
-.field-inline {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: stretch;
 }
 
 .field-action {
@@ -567,22 +661,10 @@ select:focus {
   padding: 9px 12px;
 }
 
-.checks {
-  margin-top: 10px;
-  display: grid;
-  gap: 7px;
-}
-
-.checks input[type="checkbox"] {
-  margin-right: 7px;
-}
-
 .paths {
-  margin-top: 0;
-  padding: 10px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.03);
+  margin-top: 4px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
   display: grid;
   gap: 6px;
   font-size: 0.82rem;
@@ -616,26 +698,7 @@ select:focus {
   color: #f3f4f6;
 }
 
-.settings-block {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  padding: 10px;
-}
-
-.transcript {
-  margin-top: 0;
-  border: 0;
-  padding-top: 0;
-}
-
-.transcript h2 {
-  margin: 0 0 6px;
-  font-size: 0.95rem;
-  color: #ffffff;
-}
-
-.transcript h3 {
+.transcript h3:not(.settings-group-title) {
   margin: 10px 0 5px;
   font-size: 0.8rem;
   text-transform: uppercase;
@@ -780,12 +843,8 @@ select:focus {
 }
 
 .app-shell.theme-light .model-card {
-  border-color: rgba(37, 99, 235, 0.24) !important;
-  background: rgba(59, 130, 246, 0.06) !important;
-}
-
-.app-shell.theme-light .model-card-title {
-  color: #1d4ed8;
+  border-color: rgba(37, 99, 235, 0.24);
+  background: rgba(59, 130, 246, 0.06);
 }
 
 .app-shell.theme-light .model-state.ready {
@@ -799,14 +858,6 @@ select:focus {
 .app-shell.theme-light .model-facts span {
   border-color: rgba(29, 78, 216, 0.16);
   color: #1d4ed8;
-}
-
-.app-shell.theme-light .settings-head h2 {
-  color: #0f172a;
-}
-
-.app-shell.theme-light .settings-head p {
-  color: #3f3f46;
 }
 
 .app-shell.theme-light button,
@@ -830,15 +881,75 @@ select:focus {
   background: #f6f6f6;
 }
 
-.app-shell.theme-light .form-grid label,
-.app-shell.theme-light .checks label {
+.app-shell.theme-light .settings-group {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.app-shell.theme-light .settings-group-title {
+  color: #475569;
+}
+
+.app-shell.theme-light .setting-label {
+  color: #0f172a;
+}
+
+.app-shell.theme-light .setting-desc {
+  color: #52525b;
+}
+
+.app-shell.theme-light .setting-row + .setting-row,
+.app-shell.theme-light .paths {
+  border-top-color: rgba(15, 23, 42, 0.1);
+}
+
+.app-shell.theme-light .toggle {
+  border-color: rgba(15, 23, 42, 0.3);
+  background: rgba(15, 23, 42, 0.08);
+}
+
+.app-shell.theme-light .toggle-knob {
+  background: #64748b;
+}
+
+.app-shell.theme-light .toggle.on {
+  border-color: var(--ok);
+  background: var(--ok);
+}
+
+.app-shell.theme-light .toggle.on .toggle-knob {
+  background: #ffffff;
+}
+
+.app-shell.theme-light .segmented {
+  border-color: rgba(15, 23, 42, 0.24);
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.app-shell.theme-light .segment {
+  background: transparent;
   color: #1e293b;
 }
 
-.app-shell.theme-light .form-grid label,
-.app-shell.theme-light .settings-block {
-  border-color: rgba(15, 23, 42, 0.16);
-  background: rgba(255, 255, 255, 0.9);
+.app-shell.theme-light .segment + .segment {
+  border-left-color: rgba(15, 23, 42, 0.16);
+}
+
+.app-shell.theme-light .segment.active {
+  background: rgba(15, 23, 42, 0.92);
+  color: #ffffff;
+}
+
+.app-shell.theme-light .hotkey-input.capturing {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+  color: #1d4ed8;
+}
+
+.app-shell.theme-light .ghost-btn.primary.attention {
+  border-color: #059669;
+  background: #059669;
+  color: #ffffff;
 }
 
 .app-shell.theme-light .field-hint {
@@ -861,14 +972,6 @@ select:focus {
   color: #b91c1c;
 }
 
-.app-shell.theme-light .transcript {
-  border-color: transparent;
-}
-
-.app-shell.theme-light .transcript h2 {
-  color: #0f172a;
-}
-
 .app-shell.theme-light .transcript h3 {
   color: #3f3f46;
 }
@@ -880,10 +983,6 @@ select:focus {
 }
 
 @media (max-width: 720px) {
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-
   .mini-header {
     align-items: flex-start;
     flex-direction: column;
@@ -897,15 +996,29 @@ select:focus {
     flex: 1;
   }
 
-  .field-inline {
-    grid-template-columns: 1fr;
-  }
-
-  .settings-head {
+  .setting-row {
     flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
   }
 
-  .settings-head .ghost-btn {
+  .setting-row select,
+  .hotkey-input {
+    max-width: none;
     width: 100%;
+    min-width: 0;
+  }
+
+  .setting-control {
+    flex-wrap: wrap;
+  }
+
+  .setting-control > select,
+  .setting-control > .hotkey-input {
+    flex: 1;
+  }
+
+  .toggle {
+    align-self: flex-start;
   }
 }
