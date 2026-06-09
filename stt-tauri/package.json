@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "stt-tauri",
   "private": true,
   "version": "0.4.0",
@@ -8,11 +8,13 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "tauri": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && tauri",
-    "tauri:release": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && tauri",
-    "build:tauri": "npm run tauri:release build",
-    "build:win:nsis": "npm run tauri:release build -- --bundles nsis",
-    "build:win:msi": "npm run tauri:release build -- --bundles msi"
+    "tauri": "tauri",
+    "tauri:win": "set \"PATH=%USERPROFILE%\\.cargo\\bin;%PATH%\" && set \"LIBCLANG_PATH=C:\\Program Files\\LLVM\\bin\" && set \"CARGO_TARGET_DIR=%LOCALAPPDATA%\\stt-tauri-target\" && tauri",
+    "build:tauri": "npm run tauri:win -- build",
+    "build:mac": "npm run tauri -- build --bundles app,dmg",
+    "build:linux": "npm run tauri -- build --bundles deb,appimage,rpm",
+    "build:win:nsis": "npm run tauri:win -- build --bundles nsis",
+    "build:win:msi": "npm run tauri:win -- build --bundles msi"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",

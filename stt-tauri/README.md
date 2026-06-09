@@ -82,10 +82,10 @@ Requirements:
 
 Commands:
 
-```powershell
+```bash
 cd stt-tauri
 npm install
-npm run tauri dev
+npm run tauri -- dev
 ```
 
 The npm Tauri commands prepend `%USERPROFILE%\.cargo\bin` because this machine
@@ -108,7 +108,7 @@ npm run build:win:nsis
 Installer output:
 
 ```text
-%LOCALAPPDATA%\stt-tauri-target\x86_64-pc-windows-msvc\release\bundle\nsis\
+%LOCALAPPDATA%\stt-tauri-target\release\bundle\nsis\
 ```
 
 Rust checks:
@@ -119,6 +119,17 @@ $env:RUSTDOC="$env:USERPROFILE\.cargo\bin\rustdoc.exe"
 & "$env:USERPROFILE\.cargo\bin\cargo.exe" test
 & "$env:USERPROFILE\.cargo\bin\cargo.exe" clippy -- -D warnings
 ```
+
+Windows MSI installer (requires WiX toolset):
+
+```powershell
+npm run build:win:msi
+```
+
+macOS and Linux bundle scripts (`npm run build:mac`, `npm run build:linux`)
+exist, but the current Nemotron backend downloads and loads a Windows-only
+ONNX Runtime GenAI build, so those targets need porting work before they
+produce a working app.
 
 ## Running The Installer Elsewhere
 

@@ -10,6 +10,7 @@
     "core:window:allow-set-decorations",
     "core:window:allow-set-resizable",
     "core:window:allow-set-size",
+    "core:window:allow-start-dragging",
     "opener:default",
     "global-shortcut:default",
     "global-shortcut:allow-register",

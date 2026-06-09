@@ -1014,6 +1014,50 @@ fn set_clipboard(text: &str) -> Result<(), String> {
         .map_err(|e| format!("Failed to copy transcript: {e}"))
 }
 
+#[cfg(target_os = "macos")]
+fn paste_shortcut() -> Result<(), String> {
+    // Give the pasteboard a moment to update before sending Cmd+V.
+    thread::sleep(Duration::from_millis(35));
+    let first = std::process::Command::new("/usr/bin/osascript")
+        .args([
+            "-e",
+            "tell application \"System Events\" to keystroke \"v\" using command down",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run macOS paste shortcut: {e}"))?;
+    if first.status.success() {
+        return Ok(());
+    }
+
+    // Fallback for some keyboard layouts/input methods in release builds.
+    let second = std::process::Command::new("/usr/bin/osascript")
+        .args([
+            "-e",
+            "tell application \"System Events\" to key code 9 using command down",
+        ])
+        .output()
+        .map_err(|e| format!("Failed to run macOS paste fallback: {e}"))?;
+    if second.status.success() {
+        return Ok(());
+    }
+
+    let first_err = String::from_utf8_lossy(&first.stderr).trim().to_string();
+    let second_err = String::from_utf8_lossy(&second.stderr).trim().to_string();
+    Err(format!(
+        "macOS paste failed. script1_status={} script1_err='{}' script2_status={} script2_err='{}'",
+        first.status, first_err, second.status, second_err
+    ))
+}
+
+#[cfg(not(target_os = "macos"))]
+fn paste_shortcut() -> Result<(), String> {
+    let mut enigo = Enigo::new();
+    enigo.key_down(Key::Control);
+    enigo.key_click(Key::Layout('v'));
+    enigo.key_up(Key::Control);
+    Ok(())
+}
+
 fn output_text(config: &AppConfig, text: &str) -> Result<(), String> {
     match config.output_mode.as_str() {
         "clipboard" => set_clipboard(text),
@@ -1025,11 +1069,7 @@ fn output_text(config: &AppConfig, text: &str) -> Result<(), String> {
         }
         _ => {
             set_clipboard(text)?;
-            let mut enigo = Enigo::new();
-            enigo.key_down(Key::Control);
-            enigo.key_click(Key::Layout('v'));
-            enigo.key_up(Key::Control);
-            Ok(())
+            paste_shortcut()
         }
     }
 }

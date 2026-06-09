@@ -1,2 +1,2 @@
-[build]
-target = "x86_64-pc-windows-msvc"
+# Intentionally empty: use the host default target.
+# Windows target selection should be passed explicitly when needed.

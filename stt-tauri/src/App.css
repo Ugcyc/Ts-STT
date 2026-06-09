@@ -109,6 +109,8 @@ body {
   min-width: 0;
   white-space: nowrap;
   user-select: none;
+  pointer-events: none;
+  -webkit-app-region: drag;
 }
 
 .capsule-settings {
