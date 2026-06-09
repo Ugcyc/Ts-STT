@@ -126,10 +126,19 @@ Windows MSI installer (requires WiX toolset):
 npm run build:win:msi
 ```
 
-macOS and Linux bundle scripts (`npm run build:mac`, `npm run build:linux`)
-exist, but the current Nemotron backend downloads and loads a Windows-only
-ONNX Runtime GenAI build, so those targets need porting work before they
-produce a working app.
+macOS bundles (run on macOS):
+
+```bash
+npm run build:mac
+```
+
+On macOS the app downloads the `osx-arm64` (or `osx-x64` on Intel) builds of
+ONNX Runtime GenAI and ONNX Runtime instead of the Windows ones, and loads
+`libonnxruntime-genai.dylib`. Dictation output uses an AppleScript Cmd+V
+paste; grant Microphone and Accessibility permissions when prompted.
+
+Linux bundles (`npm run build:linux`) compile, but the runtime download is
+not wired for Linux yet.
 
 ## Running The Installer Elsewhere
 

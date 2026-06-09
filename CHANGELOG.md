@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Add macOS support to the Nemotron backend: downloads osx-arm64/osx-x64
+  ONNX Runtime GenAI and ONNX Runtime archives, extracts tar.gz/tgz, and
+  loads `libonnxruntime-genai.dylib`.
+
 ## 0.4.0
 
 - Redesign the settings menu into grouped sections with toggle switches, a

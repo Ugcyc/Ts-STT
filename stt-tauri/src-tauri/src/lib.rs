@@ -23,6 +23,28 @@ const MODEL_REPO: &str = "onnx-community/nemotron-3.5-asr-streaming-0.6b-onnx-in
 const MODEL_FOLDER: &str = "nemotron-3.5-asr-streaming-0.6b-onnx-int4";
 const GENAI_VERSION: &str = "0.14.0";
 const ONNX_RUNTIME_VERSION: &str = "1.24.1";
+
+#[cfg(all(target_os = "macos", target_arch = "aarch64"))]
+const RUNTIME_PLATFORM: &str = "osx-arm64";
+#[cfg(all(target_os = "macos", not(target_arch = "aarch64")))]
+const RUNTIME_PLATFORM: &str = "osx-x64";
+#[cfg(not(target_os = "macos"))]
+const RUNTIME_PLATFORM: &str = "win-x64";
+
+#[cfg(target_os = "macos")]
+const GENAI_ARCHIVE_EXT: &str = "tar.gz";
+#[cfg(not(target_os = "macos"))]
+const GENAI_ARCHIVE_EXT: &str = "zip";
+
+#[cfg(target_os = "macos")]
+const ORT_ARCHIVE_EXT: &str = "tgz";
+#[cfg(not(target_os = "macos"))]
+const ORT_ARCHIVE_EXT: &str = "zip";
+
+#[cfg(target_os = "macos")]
+const GENAI_LIB_NAME: &str = "libonnxruntime-genai.dylib";
+#[cfg(not(target_os = "macos"))]
+const GENAI_LIB_NAME: &str = "onnxruntime-genai.dll";
 const MODEL_FILES: &[&str] = &[
     "audio_processor_config.json",
     "decoder.onnx",
@@ -711,26 +733,83 @@ fn resolve_model_path(config: &AppConfig, model_dir: &Path) -> PathBuf {
 
 fn runtime_dll(runtime_dir: &Path) -> PathBuf {
     runtime_dir
-        .join(format!("onnxruntime-genai-{GENAI_VERSION}-win-x64"))
+        .join(format!("onnxruntime-genai-{GENAI_VERSION}-{RUNTIME_PLATFORM}"))
         .join("lib")
-        .join("onnxruntime-genai.dll")
+        .join(GENAI_LIB_NAME)
+}
+
+#[cfg(target_os = "macos")]
+fn base_lib_name() -> String {
+    format!("libonnxruntime.{ONNX_RUNTIME_VERSION}.dylib")
+}
+
+#[cfg(not(target_os = "macos"))]
+fn base_lib_name() -> String {
+    "onnxruntime.dll".to_string()
 }
 
 fn base_runtime_dll(runtime_dir: &Path) -> PathBuf {
     runtime_dll(runtime_dir)
         .parent()
         .expect("runtime DLL has a parent")
-        .join("onnxruntime.dll")
+        .join(base_lib_name())
 }
 
 fn installation_exists(model_path: &Path, runtime_path: &Path) -> bool {
     runtime_path.is_file()
         && runtime_path
             .parent()
-            .is_some_and(|parent| parent.join("onnxruntime.dll").is_file())
+            .is_some_and(|parent| parent.join(base_lib_name()).is_file())
         && MODEL_FILES
             .iter()
             .all(|file| model_path.join(file).is_file())
+}
+
+#[cfg(not(target_os = "macos"))]
+fn install_base_runtime(source_lib: &Path, destination_lib: &Path) -> Result<(), String> {
+    for file_name in ["onnxruntime.dll", "onnxruntime_providers_shared.dll"] {
+        fs::copy(source_lib.join(file_name), destination_lib.join(file_name))
+            .map_err(|e| format!("Failed to install {file_name}: {e}"))?;
+    }
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn install_base_runtime(source_lib: &Path, destination_lib: &Path) -> Result<(), String> {
+    // Copy every libonnxruntime* dylib (including the versioned one the GenAI
+    // dylib links against via @rpath/@loader_path) beside the GenAI library.
+    let entries = fs::read_dir(source_lib)
+        .map_err(|e| format!("Failed to read ONNX Runtime lib folder: {e}"))?;
+    let mut copied = 0usize;
+    for entry in entries.flatten() {
+        let file_name = entry.file_name();
+        let name = file_name.to_string_lossy();
+        if name.starts_with("libonnxruntime") && name.ends_with(".dylib") {
+            fs::copy(entry.path(), destination_lib.join(&file_name))
+                .map_err(|e| format!("Failed to install {name}: {e}"))?;
+            copied += 1;
+        }
+    }
+    if copied == 0 {
+        return Err("No libonnxruntime dylibs found in the downloaded archive.".to_string());
+    }
+    Ok(())
+}
+
+fn extract_archive(archive: &Path, destination: &Path) -> Result<(), String> {
+    let file = File::open(archive).map_err(|e| format!("Failed to open archive: {e}"))?;
+    let name = archive.to_string_lossy().to_lowercase();
+    if name.ends_with(".zip") {
+        let mut zip =
+            zip::ZipArchive::new(file).map_err(|e| format!("Invalid archive: {e}"))?;
+        zip.extract(destination)
+            .map_err(|e| format!("Failed to extract archive: {e}"))
+    } else {
+        let tar = flate2::read::GzDecoder::new(file);
+        tar::Archive::new(tar)
+            .unpack(destination)
+            .map_err(|e| format!("Failed to extract archive: {e}"))
+    }
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -854,9 +933,11 @@ fn download_installation(
     let dll = runtime_dll(runtime_dir);
     if !dll.exists() {
         let runtime_item = format!("ONNX Runtime GenAI {GENAI_VERSION}");
-        let archive = runtime_dir.join(format!("onnxruntime-genai-{GENAI_VERSION}-win-x64.zip"));
+        let archive_name =
+            format!("onnxruntime-genai-{GENAI_VERSION}-{RUNTIME_PLATFORM}.{GENAI_ARCHIVE_EXT}");
+        let archive = runtime_dir.join(&archive_name);
         let url = format!(
-            "https://github.com/microsoft/onnxruntime-genai/releases/download/v{GENAI_VERSION}/onnxruntime-genai-{GENAI_VERSION}-win-x64.zip"
+            "https://github.com/microsoft/onnxruntime-genai/releases/download/v{GENAI_VERSION}/{archive_name}"
         );
         download_file(
             app,
@@ -876,11 +957,7 @@ fn download_installation(
             None,
             "Extracting native ONNX runtime",
         );
-        let file =
-            File::open(&archive).map_err(|e| format!("Failed to open runtime archive: {e}"))?;
-        let mut zip =
-            zip::ZipArchive::new(file).map_err(|e| format!("Invalid runtime archive: {e}"))?;
-        zip.extract(runtime_dir)
+        extract_archive(&archive, runtime_dir)
             .map_err(|e| format!("Failed to extract runtime: {e}"))?;
         fs::remove_file(archive).map_err(|e| format!("Failed to remove runtime archive: {e}"))?;
     }
@@ -888,9 +965,11 @@ fn download_installation(
     let base_dll = base_runtime_dll(runtime_dir);
     if !base_dll.exists() {
         let runtime_item = format!("ONNX Runtime {ONNX_RUNTIME_VERSION}");
-        let archive = runtime_dir.join(format!("onnxruntime-win-x64-{ONNX_RUNTIME_VERSION}.zip"));
+        let archive_name =
+            format!("onnxruntime-{RUNTIME_PLATFORM}-{ONNX_RUNTIME_VERSION}.{ORT_ARCHIVE_EXT}");
+        let archive = runtime_dir.join(&archive_name);
         let url = format!(
-            "https://github.com/microsoft/onnxruntime/releases/download/v{ONNX_RUNTIME_VERSION}/onnxruntime-win-x64-{ONNX_RUNTIME_VERSION}.zip"
+            "https://github.com/microsoft/onnxruntime/releases/download/v{ONNX_RUNTIME_VERSION}/{archive_name}"
         );
         download_file(app, &url, &archive, &runtime_item, item_count, item_count)?;
         emit_download_progress(
@@ -903,22 +982,15 @@ fn download_installation(
             None,
             "Installing matching private ONNX Runtime",
         );
-        let file = File::open(&archive)
-            .map_err(|e| format!("Failed to open ONNX Runtime archive: {e}"))?;
-        let mut zip =
-            zip::ZipArchive::new(file).map_err(|e| format!("Invalid ONNX Runtime archive: {e}"))?;
-        zip.extract(runtime_dir)
+        extract_archive(&archive, runtime_dir)
             .map_err(|e| format!("Failed to extract ONNX Runtime: {e}"))?;
         let source_lib = runtime_dir
-            .join(format!("onnxruntime-win-x64-{ONNX_RUNTIME_VERSION}"))
+            .join(format!("onnxruntime-{RUNTIME_PLATFORM}-{ONNX_RUNTIME_VERSION}"))
             .join("lib");
         let destination_lib = dll
             .parent()
             .ok_or_else(|| "ONNX Runtime GenAI library folder is missing.".to_string())?;
-        for file_name in ["onnxruntime.dll", "onnxruntime_providers_shared.dll"] {
-            fs::copy(source_lib.join(file_name), destination_lib.join(file_name))
-                .map_err(|e| format!("Failed to install {file_name}: {e}"))?;
-        }
+        install_base_runtime(&source_lib, destination_lib)?;
         fs::remove_file(archive)
             .map_err(|e| format!("Failed to remove ONNX Runtime archive: {e}"))?;
     }

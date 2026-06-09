@@ -31,3 +31,5 @@ libloading = "0.8"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["blocking", "rustls-tls"] }
 zip = "2"
+flate2 = "1"
+tar = "0.4"
