@@ -132,13 +132,13 @@ macOS bundles (run on macOS):
 npm run build:mac
 ```
 
-On macOS the app downloads the `osx-arm64` (or `osx-x64` on Intel) builds of
+On Apple Silicon the app downloads the `osx-arm64` builds of
 ONNX Runtime GenAI and ONNX Runtime instead of the Windows ones, and loads
 `libonnxruntime-genai.dylib`. Dictation output uses an AppleScript Cmd+V
 paste; grant Microphone and Accessibility permissions when prompted.
 
-Linux bundles (`npm run build:linux`) compile, but the runtime download is
-not wired for Linux yet.
+Linux and Intel Mac runtime downloads are unavailable for the pinned releases.
+The downloader reports this explicitly.
 
 ## Running The Installer Elsewhere
 
@@ -185,3 +185,92 @@ dictation stops.
 - `enigo` and `arboard`: typing, paste, and clipboard output
 
 The native runtime is loaded dynamically from the managed app-data directory.
+
+
+## Optional dictation controls
+
+New options are off by default; the existing INT4 model and 560 ms chunk stay in use.
+Save settings while recording is stopped. Settings are captured at the start of each dictation.
+
+- **Protect the destination (Windows):** watches the foreground window and physical
+  keyboard/mouse editing input. Switching apps, clicking, or manually typing pauses
+  insertion for the rest of that dictation. Use the configured hotkey to start and
+  stop, then copy the completed transcript if insertion was paused. This is a
+  conservative input guard, not an accessibility integration with every text editor.
+  Other platforms can use Clipboard mode or leave protection off.
+- **Live transcript preview:** shows partial text in the overlay without requiring
+  live typing. The compact window expands for errors, preview, and recovery actions.
+- **Hold back unfinished words:** leaves the last two whitespace-separated words
+  out of live insertion until more speech arrives; stopping inserts the full text.
+- **Filter long silences:** enables the runtime's existing CPU Silero VAD. It skips
+  prolonged silence but keeps recording, so pauses to think remain possible.
+- **Stop after silence:** a separate opt-in switch requiring silence filtering.
+  Choose 2–600 seconds. It only arms after recognized text appears, and the runtime's
+  detection/context grace period adds to the selected timeout. Leave it off for
+  arbitrarily long thinking pauses. Auto-stop is handled by the backend.
+- **Phrase replacements:** add, edit, or remove your own literal phrase pairs.
+  The list starts empty and has a separate enable switch. Matches ignore case,
+  respect word boundaries, prefer longer phrases, and do not cascade. These are
+  text replacements, not model fine-tuning. Spoken punctuation also uses whole-word
+  matching. The same formatting is applied to live and final output.
+- **Local transcript history:** optional text-only storage, with 1–100 entries.
+  No audio is recorded to disk. Disabling and saving deletes stored history.
+  The last completed transcript is retained in memory even with history off.
+  Use **Copy last**, **Reinsert in 3 seconds**, or **Clear transcripts**. Reinsertion
+  lets you switch to the intended field during the countdown.
+
+Typing runs on a separate worker with a coalescing update slot. Audio input has a
+bounded queue; overflow stops recording and marks the recovered text incomplete.
+Audio always processes during capture, even when live output is disabled, avoiding
+an unbounded recording buffer. Errors appear in the compact overlay. Performance
+reports measure load time, first-text delay, inference/finalization time, maximum
+queued audio, and real-time factor; they do not include transcript content.
+
+## Verified downloads and platform checks
+
+Repair checks the pinned model revision against SHA-256 hashes in
+`src-tauri/model-manifest.json`. It replaces damaged files and validates complete
+transfers before installing them. Runtime archive hashes are pinned to the GitHub
+release asset digests for GenAI 0.14.0 and ONNX Runtime 1.24.1. A local receipt checks
+installed runtime libraries for accidental corruption; it is not a tamper-proof
+signature. Existing runtime installations without a receipt are reinstalled once
+when Repair is used. Recording must be stopped before repair.
+
+Verified runtime archives are available for Windows x64 and Apple Silicon.
+The pinned releases do not provide the Intel Mac artifacts previously assumed by
+this app. Intel Mac and Linux users receive an explicit unsupported-runtime error.
+
+## Validation
+
+The **Desktop checks** workflow builds the frontend and runs Rust unit tests and
+Clippy on Windows. Model loading is an explicitly ignored integration test because
+it requires the model and runtime. Run it on a configured machine with:
+
+```powershell
+$env:TS_STT_TEST_MODEL_DIR="C:\path\to\nemotron-model"
+$env:TS_STT_TEST_RUNTIME_DLL="C:\path\to\onnxruntime-genai.dll"
+cargo test --manifest-path src-tauri/Cargo.toml loads_installed_model_when_paths_are_provided -- --ignored
+```
+
+Manual acceptance checks before merging:
+
+1. Enable protected live typing, dictate, then click another field and type manually.
+   Insertion must pause; the completed transcript must still be available to copy.
+2. Start/stop via the configured hotkey without moving focus. Final text should be
+   inserted, including the last two words when that option is enabled.
+3. With silence stopping off, pause beyond the timeout and confirm recording stays
+   active. With it on, speak and then pause; confirm automatic completion and recovery.
+4. Disconnect the microphone and simulate an output failure; verify a visible error
+   and retained partial/completed text. Repair a damaged model file and retry.
+
+The UI smoke test uses a mocked Tauri bridge to check settings, optional defaults,
+replacement editing, transcript recovery, and compact error rendering. It does not
+simulate microphone hardware or native text insertion:
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:ui
+```
+
+Windows CI uses its installed Edge browser via `TS_STT_BROWSER_CHANNEL=msedge`.

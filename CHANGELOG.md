@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Remove the unused Python prototype, launch scripts, dependencies, and tests.
+- Add optional destination protection, live preview, steadier live typing, CPU
+  silence filtering and independently configurable silence stopping.
+- Add an empty user-managed phrase replacement editor and opt-in local history,
+  with transcript recovery, copy, delayed reinsertion, and deletion controls.
+- Move typing off the inference worker, bound the audio queue, surface failures,
+  measure session timings, and resolve saved microphones by name.
+- Verify model/runtime downloads and repair corrupt files. Add Windows checks.
+
 - Add macOS support to the Nemotron backend: downloads osx-arm64/osx-x64
   ONNX Runtime GenAI and ONNX Runtime archives, extracts tar.gz/tgz, and
   loads `libonnxruntime-genai.dylib`.

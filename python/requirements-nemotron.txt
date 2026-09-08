@@ -1,3 +1,0 @@
-# Native Windows CPU runtime for the quantized Nemotron 3.5 ONNX model.
-huggingface-hub>=0.23
-onnxruntime-genai>=0.14.1

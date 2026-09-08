@@ -2,7 +2,7 @@ use std::{
     ffi::{c_char, c_void, CStr, CString},
     path::Path,
     ptr,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use libloading::{Library, Symbol};
@@ -261,8 +261,8 @@ impl NemotronModel {
         }
     }
 
-    pub fn start_session(&self, language: &str) -> Result<NemotronSession, String> {
-        NemotronSession::new(Arc::clone(&self.api), self.model, language)
+    pub fn start_session(&self, language: &str, use_vad: bool) -> Result<NemotronSession, String> {
+        NemotronSession::new(Arc::clone(&self.api), self.model, language, use_vad)
     }
 }
 
@@ -281,10 +281,16 @@ pub struct NemotronSession {
     generator: *mut OgaGenerator,
     buffer: Vec<f32>,
     text: String,
+    silent_samples: usize,
 }
 
 impl NemotronSession {
-    fn new(api: Arc<Api>, model: *mut OgaModel, language: &str) -> Result<Self, String> {
+    fn new(
+        api: Arc<Api>,
+        model: *mut OgaModel,
+        language: &str,
+        enable_vad: bool,
+    ) -> Result<Self, String> {
         unsafe {
             let mut processor = ptr::null_mut();
             api.check((api.create_streaming_processor)(model, &mut processor))?;
@@ -301,7 +307,7 @@ impl NemotronSession {
             api.check((api.create_generator)(model, params, &mut generator))?;
 
             let use_vad = CString::new("use_vad").unwrap();
-            let false_value = CString::new("false").unwrap();
+            let false_value = CString::new(if enable_vad { "true" } else { "false" }).unwrap();
             api.check((api.streaming_processor_set_option)(
                 processor,
                 use_vad.as_ptr(),
@@ -324,6 +330,7 @@ impl NemotronSession {
                 generator,
                 buffer: Vec::new(),
                 text: String::new(),
+                silent_samples: 0,
             })
         }
     }
@@ -335,6 +342,10 @@ impl NemotronSession {
             self.process(&chunk)?;
         }
         Ok(clean_text(&self.text))
+    }
+
+    pub fn silent_seconds(&self) -> f32 {
+        self.silent_samples as f32 / 16000.0
     }
 
     pub fn finish(&mut self) -> Result<String, String> {
@@ -362,6 +373,13 @@ impl NemotronSession {
                 audio.len(),
                 &mut tensors,
             ))?;
+            if audio.len() == 8960 {
+                if tensors.is_null() {
+                    self.silent_samples += audio.len();
+                } else {
+                    self.silent_samples = 0;
+                }
+            }
             self.decode_tensors(tensors)
         }
     }
@@ -416,8 +434,11 @@ impl Drop for NemotronSession {
 }
 
 fn clean_text(text: &str) -> String {
-    let tags = Regex::new(r"\s*<[a-z]{2}(?:-[A-Z]{2})?>\s*").expect("valid regex");
-    tags.replace_all(text, " ").trim().to_string()
+    static TAGS: OnceLock<Regex> = OnceLock::new();
+    TAGS.get_or_init(|| Regex::new(r"\s*<[a-z]{2}(?:-[A-Z]{2})?>\s*").expect("valid regex"))
+        .replace_all(text, " ")
+        .trim()
+        .to_string()
 }
 
 pub fn language_id(language: &str) -> Option<i32> {
@@ -473,6 +494,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    #[ignore = "requires installed Nemotron model and native runtime; run explicitly with TS_STT_TEST_MODEL_DIR and TS_STT_TEST_RUNTIME_DLL"]
     fn loads_installed_model_when_paths_are_provided() {
         let Ok(runtime) = std::env::var("TS_STT_TEST_RUNTIME_DLL") else {
             return;

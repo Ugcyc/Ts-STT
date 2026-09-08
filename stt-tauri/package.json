@@ -14,7 +14,8 @@
     "build:mac": "npm run tauri -- build --bundles app,dmg",
     "build:linux": "npm run tauri -- build --bundles deb,appimage,rpm",
     "build:win:nsis": "npm run tauri:win -- build --bundles nsis",
-    "build:win:msi": "npm run tauri:win -- build --bundles msi"
+    "build:win:msi": "npm run tauri:win -- build --bundles msi",
+    "test:ui": "node tests/ui-smoke.cjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
@@ -28,6 +29,7 @@
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
     "@vitejs/plugin-react": "^4.6.0",
+    "playwright": "1.63.0",
     "typescript": "~5.8.3",
     "vite": "^7.0.4"
   }
