@@ -9,6 +9,9 @@ import {
 } from "@tauri-apps/plugin-global-shortcut";
 import "./App.css";
 
+type Replacement = { heard: string; replacement: string };
+type TranscriptEntry = { id: string; created_at: number; text: string; seconds: number };
+
 type AppConfig = {
   hotkey: string;
   mode: string;
@@ -25,6 +28,15 @@ type AppConfig = {
   silence_timeout_secs: number;
   log_transcripts: boolean;
   model_path: string | null;
+  protect_destination: boolean;
+  stable_live_text: boolean;
+  live_preview: boolean;
+  vad_enabled: boolean;
+  auto_stop_enabled: boolean;
+  replacements_enabled: boolean;
+  replacements: Replacement[];
+  history_enabled: boolean;
+  history_limit: number;
 };
 
 type InitialData = {
@@ -33,12 +45,16 @@ type InitialData = {
   model_path: string;
   model_exists: boolean;
   status: string;
+  history: TranscriptEntry[];
+  last_transcript: TranscriptEntry | null;
+  protected_insertion_supported: boolean;
 };
 
 type TranscriptionResponse = {
   raw_text: string;
   final_text: string;
   seconds: number;
+  warning: string | null;
 };
 
 type ToggleResponse = {
@@ -74,6 +90,15 @@ const defaultConfig: AppConfig = {
   silence_timeout_secs: 60,
   log_transcripts: false,
   model_path: null,
+  protect_destination: false,
+  stable_live_text: false,
+  live_preview: false,
+  vad_enabled: false,
+  auto_stop_enabled: false,
+  replacements_enabled: false,
+  replacements: [],
+  history_enabled: false,
+  history_limit: 20,
 };
 
 function normalizeHotkey(input: string): string {
@@ -172,7 +197,7 @@ const OUTPUT_MODES = [
 ];
 
 function App() {
-  const MINI_SIZE = new LogicalSize(210, 58);
+  const MINI_SIZE = new LogicalSize(320, 180);
   const EXPANDED_SIZE = new LogicalSize(820, 700);
 
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
@@ -191,6 +216,10 @@ function App() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [savedConfig, setSavedConfig] = useState<AppConfig>(defaultConfig);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
+  const [preview, setPreview] = useState("");
+  const [history, setHistory] = useState<TranscriptEntry[]>([]);
+  const [protectedSupported, setProtectedSupported] = useState(true);
+  const [hasLastTranscript, setHasLastTranscript] = useState(false);
 
   const hotkeyInFlight = useRef(false);
   const isRecordingRef = useRef(false);
@@ -204,6 +233,10 @@ function App() {
     setError(null);
     try {
       const data = await invoke<InitialData>("get_initial_data");
+      setHistory(data.history);
+      setProtectedSupported(data.protected_insertion_supported);
+      setHasLastTranscript(Boolean(data.last_transcript));
+      if (data.last_transcript) setFinalText(data.last_transcript.text);
       setConfig(data.config);
       setSavedConfig(data.config);
       setDevices(data.input_devices.length ? data.input_devices : ["Default"]);
@@ -219,17 +252,22 @@ function App() {
 
   useEffect(() => {
     void loadInitial();
-    let unlisten: (() => void) | undefined;
-    void listen<DownloadProgress>("download-progress", (event) => {
-      setDownloadProgress(event.payload);
-      setInfo(event.payload.message);
-    }).then((stopListening) => {
-      unlisten = stopListening;
-    });
-    return () => {
-      void unregisterAll();
-      unlisten?.();
-    };
+    let disposed = false;
+    const unlisteners: (() => void)[] = [];
+    const subscriptions = [
+      listen<DownloadProgress>("download-progress", (event) => {
+        setDownloadProgress(event.payload); setInfo(event.payload.message);
+      }),
+      listen<string>("dictation-preview", (event) => setPreview(event.payload)),
+      listen<string>("dictation-warning", (event) => setError(event.payload)),
+      listen<TranscriptionResponse>("dictation-completed", (event) => {
+        applyTranscript(event.payload); setStatus("Idle"); setIsRecording(false); isRecordingRef.current = false;
+      }),
+    ];
+    for (const subscription of subscriptions) {
+      void subscription.then((unlisten) => { if (disposed) unlisten(); else unlisteners.push(unlisten); });
+    }
+    return () => { disposed = true; void unregisterAll(); unlisteners.forEach((fn) => fn()); };
   }, []);
 
   useEffect(() => {
@@ -294,10 +332,12 @@ function App() {
   const toggleFromHotkey = async () => {
     if (hotkeyInFlight.current) return;
     hotkeyInFlight.current = true;
+    setBusy(true);
     setError(null);
     setInfo(null);
     try {
       const wasRecording = isRecordingRef.current;
+      if (!wasRecording) setPreview("");
       if (wasRecording) {
         setStatus("Transcribing");
       }
@@ -306,25 +346,36 @@ function App() {
     } catch (err) {
       setError(String(err));
       setStatus("Idle");
-      setIsRecording(false);
+      setIsRecording(false); isRecordingRef.current = false;
     } finally {
       hotkeyInFlight.current = false;
+      setBusy(false);
     }
   };
 
   const applyToggleResult = (result: ToggleResponse) => {
     setStatus(result.status);
     setIsRecording(result.is_recording);
+    isRecordingRef.current = result.is_recording;
     if (result.transcript) {
-      setFinalText(result.transcript.final_text);
-      setRawText(result.transcript.raw_text);
+      applyTranscript(result.transcript);
     }
     if (result.note) {
       setInfo(result.note);
     }
   };
 
+  const applyTranscript = (transcript: TranscriptionResponse) => {
+    setFinalText(transcript.final_text); setRawText(transcript.raw_text); setPreview("");
+    if (transcript.final_text) setHasLastTranscript(true);
+    if (transcript.warning) setError(transcript.warning);
+    void invoke<TranscriptEntry[]>("get_transcript_history").then(setHistory).catch((e) => setError(String(e)));
+  };
+
   const handleStart = async () => {
+    if (hotkeyInFlight.current) return;
+    hotkeyInFlight.current = true;
+    setPreview("");
     setBusy(true);
     setError(null);
     setInfo(null);
@@ -334,17 +385,20 @@ function App() {
         device_name: config.mic_device,
       });
       setStatus("Listening");
-      setIsRecording(true);
+      setIsRecording(true); isRecordingRef.current = true;
     } catch (err) {
       setError(String(err));
       setStatus("Idle");
-      setIsRecording(false);
+      setIsRecording(false); isRecordingRef.current = false;
     } finally {
       setBusy(false);
+      hotkeyInFlight.current = false;
     }
   };
 
   const handleStop = async () => {
+    if (hotkeyInFlight.current) return;
+    hotkeyInFlight.current = true;
     setBusy(true);
     setError(null);
     setInfo(null);
@@ -352,18 +406,18 @@ function App() {
       setStatus("Transcribing");
       const result = await invoke<TranscriptionResponse>("stop_recording_and_process");
       setStatus("Idle");
-      setIsRecording(false);
-      setFinalText(result.final_text);
-      setRawText(result.raw_text);
+      setIsRecording(false); isRecordingRef.current = false;
+      applyTranscript(result);
       if (!result.final_text) {
         setInfo("No speech detected.");
       }
     } catch (err) {
       setError(String(err));
       setStatus("Idle");
-      setIsRecording(false);
+      setIsRecording(false); isRecordingRef.current = false;
     } finally {
       setBusy(false);
+      hotkeyInFlight.current = false;
     }
   };
 
@@ -375,6 +429,7 @@ function App() {
       const saved = await invoke<AppConfig>("save_config", { config });
       setConfig(saved);
       setSavedConfig(saved);
+      setHistory(await invoke<TranscriptEntry[]>("get_transcript_history"));
       await registerHotkey(saved.hotkey);
       setInfo("Settings saved.");
     } catch (err) {
@@ -427,6 +482,19 @@ function App() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const transcriptAction = async (action: "copy_transcript" | "reinsert_transcript", id: string | null = null) => {
+    if (hotkeyInFlight.current) return;
+    hotkeyInFlight.current = true; setBusy(true); setError(null);
+    setInfo(action === "reinsert_transcript" ? "Switch to your text field. Pasting in 3 seconds…" : null);
+    try { await invoke(action, { id }); setInfo(action === "copy_transcript" ? "Transcript copied." : "Transcript pasted."); }
+    catch (e) { setError(String(e)); }
+    finally { setBusy(false); hotkeyInFlight.current = false; }
+  };
+  const clearHistory = async () => {
+    try { await invoke("clear_transcript_history"); setHistory([]); setHasLastTranscript(false); setFinalText(""); setRawText(""); }
+    catch(e) { setError(String(e)); }
   };
 
   const updateConfig = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
@@ -484,7 +552,7 @@ function App() {
   return (
     <main className={`app-shell ${settingsOpen ? "expanded" : "compact"} theme-${theme}`}>
       {!settingsOpen ? (
-        <section
+        <div className="compact-stack"><section
           className={`capsule ${capsuleTone}`}
           data-tauri-drag-region
         >
@@ -503,7 +571,7 @@ function App() {
               <line x1="12" y1="19" x2="12" y2="22"></line>
             </svg>
           </button>
-          <span className="status-text" data-tauri-drag-region>{compactText}</span>
+          <span className="status-text" data-tauri-drag-region>{error ? "Needs attention" : compactText}</span>
           <button
             className="capsule-settings"
             onClick={() => setSettingsOpen(true)}
@@ -521,6 +589,11 @@ function App() {
             </svg>
           </button>
         </section>
+        {error && <div className="compact-message error" role="alert">{error}</div>}
+        {!error && info && <div className="compact-message" role="status">{info}</div>}
+        {savedConfig.live_preview && preview && <div className="compact-preview" aria-live="polite">{preview}</div>}
+        {hasLastTranscript && !isRecording && <button className="field-action" disabled={busy} onClick={() => transcriptAction("copy_transcript")}>Copy last dictation</button>}
+        </div>
       ) : (
         <section className="mini-card expanded">
           <header className="mini-header" data-tauri-drag-region>
@@ -541,7 +614,7 @@ function App() {
               <button
                 className={`ghost-btn primary ${dirty ? "attention" : ""}`}
                 onClick={handleSaveConfig}
-                disabled={busy || !dirty}
+                disabled={busy || isRecording || !dirty}
               >
                 {dirty ? "Save changes" : "Saved"}
               </button>
@@ -660,6 +733,28 @@ function App() {
               </div>
             </section>
 
+            <section className="settings-group">
+              <h3 className="settings-group-title">Optional dictation features</h3>
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Protect the destination</span><span className="setting-desc">{protectedSupported ? "Pause insertion if you change apps, click, or type. Start and stop with your hotkey." : "Protected insertion is Windows-only. Turn off to allow insertion on this platform, or use Clipboard mode."}</span></div><Toggle checked={config.protect_destination} onChange={v => updateConfig("protect_destination",v)} label="Protect the destination" /></div>
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Live transcript preview</span><span className="setting-desc">Show recognized words in the overlay without typing into another app.</span></div><Toggle checked={config.live_preview} onChange={v => updateConfig("live_preview",v)} label="Live transcript preview" /></div>
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Hold back unfinished words</span><span className="setting-desc">Keep the last two words in the preview until more speech arrives. Finish inserts everything.</span></div><Toggle checked={config.stable_live_text} onChange={v => updateConfig("stable_live_text",v)} label="Hold back unfinished words" /></div>
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Filter long silences</span><span className="setting-desc">Use local speech detection to skip extended silence. Does not stop recording by itself.</span></div><Toggle checked={config.vad_enabled} onChange={v => setConfig(prev => ({...prev,vad_enabled:v,auto_stop_enabled:v && prev.auto_stop_enabled}))} label="Filter long silences" /></div>
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Stop after silence</span><span className="setting-desc">Off by default so you can pause to think. Starts counting after speech and the detection grace period.</span></div><Toggle checked={config.auto_stop_enabled} disabled={!config.vad_enabled} onChange={v => updateConfig("auto_stop_enabled",v)} label="Stop after silence" /></div>
+              {config.auto_stop_enabled && <div className="setting-row"><label htmlFor="silence-seconds">Silence timeout (seconds)</label><input id="silence-seconds" type="number" min={2} max={600} value={config.silence_timeout_secs} onChange={e => updateConfig("silence_timeout_secs",Number(e.target.value))} /></div>}
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Save local transcript history</span><span className="setting-desc">Optional text-only history on this device. No audio is saved. Turning this off and saving deletes the stored history.</span></div><Toggle checked={config.history_enabled} onChange={v => updateConfig("history_enabled",v)} label="Save local transcript history" /></div>
+              {config.history_enabled && <div className="setting-row"><label htmlFor="history-limit">Transcripts to keep</label><input id="history-limit" type="number" min={1} max={100} value={config.history_limit} onChange={e => updateConfig("history_limit",Number(e.target.value))} /></div>}
+            </section>
+            <section className="settings-group">
+              <h3 className="settings-group-title">Your phrase replacements</h3>
+              <div className="setting-row"><div className="setting-text"><span className="setting-label">Apply replacements</span><span className="setting-desc">Only phrases you add here. Matches whole phrases, ignoring capitalization.</span></div><Toggle checked={config.replacements_enabled} onChange={v => updateConfig("replacements_enabled",v)} label="Apply replacements" /></div>
+              {config.replacements.length === 0 && <p className="field-hint">No replacements added.</p>}
+              {config.replacements.map((rule,index) => <div className="replacement-row" key={index}>
+                <input aria-label={`Heard phrase ${index+1}`} placeholder="What it hears" value={rule.heard} maxLength={200} onChange={e => updateConfig("replacements",config.replacements.map((r,i) => i===index ? {...r,heard:e.target.value} : r))} />
+                <input aria-label={`Replacement ${index+1}`} placeholder="What to write" value={rule.replacement} maxLength={2000} onChange={e => updateConfig("replacements",config.replacements.map((r,i) => i===index ? {...r,replacement:e.target.value} : r))} />
+                <button className="field-action" aria-label={`Remove replacement ${index+1}`} onClick={() => updateConfig("replacements",config.replacements.filter((_,i) => i!==index))}>Remove</button>
+              </div>)}
+              <button className="field-action" disabled={config.replacements.length >= 200} onClick={() => updateConfig("replacements",[...config.replacements,{heard:"",replacement:""}])}>Add replacement</button>
+            </section>
             <section className="settings-group">
               <h3 className="settings-group-title">Speech Model</h3>
               <div className="model-card">
@@ -819,7 +914,7 @@ function App() {
                 <div className="setting-text">
                   <span className="setting-label">Streaming</span>
                   <span className="setting-desc">
-                    Transcribe in 560 ms chunks while you speak instead of all at once
+                    Enable live typing while speaking. Audio always processes in the background to avoid a large backlog.
                   </span>
                 </div>
                 <Toggle
@@ -875,7 +970,7 @@ function App() {
                     <div className="setting-text">
                       <span className="setting-label">Performance report</span>
                       <span className="setting-desc">
-                        Copies timing logs to the clipboard for troubleshooting
+                        Copies measured load time, inference time, first-text delay, and audio backlog for the last dictation
                       </span>
                     </div>
                     <button className="field-action" onClick={handleCopyPerfLogs} disabled={busy}>
@@ -897,10 +992,14 @@ function App() {
 
             <section className="transcript settings-group">
               <h3 className="settings-group-title">Last Transcript</h3>
+              {savedConfig.live_preview && preview && <pre aria-live="polite">{preview}</pre>}
+              <div className="transcript-actions"><button className="field-action" disabled={!hasLastTranscript || busy} onClick={() => transcriptAction("copy_transcript")}>Copy last</button><button className="field-action" disabled={!hasLastTranscript || busy || isRecording} onClick={() => transcriptAction("reinsert_transcript")}>Reinsert in 3 seconds</button></div>
               <h3>Final</h3>
               <pre>{finalText || "(empty)"}</pre>
               <h3>Raw</h3>
               <pre>{rawText || "(empty)"}</pre>
+              {history.length > 0 && <><h3>Saved on this device</h3>{history.map(entry => <article key={entry.id} className="history-entry"><small>{new Date(entry.created_at*1000).toLocaleString()}</small><pre>{entry.text}</pre><div className="transcript-actions"><button className="field-action" disabled={busy} onClick={() => transcriptAction("copy_transcript",entry.id)}>Copy</button><button className="field-action" disabled={busy || isRecording} onClick={() => transcriptAction("reinsert_transcript",entry.id)}>Reinsert in 3 seconds</button></div></article>)}</>}
+              <button className="field-action" disabled={busy || isRecording || (!hasLastTranscript && history.length === 0)} onClick={clearHistory}>Clear transcripts</button>
             </section>
           </section>
         </section>
@@ -910,3 +1009,4 @@ function App() {
 }
 
 export default App;
+

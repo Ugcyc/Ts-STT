@@ -1024,3 +1024,14 @@ select:focus {
     align-self: flex-start;
   }
 }
+
+
+.compact-stack { width: 100%; display: flex; flex-direction: column; gap: 6px; }
+.compact-stack .capsule { width: 100%; box-sizing: border-box; }
+.compact-message, .compact-preview { background: var(--panel, #202329); border-radius: 8px; padding: 8px 12px; font-size: 12px; line-height: 1.4; max-height: 72px; overflow: auto; overflow-wrap: anywhere; }
+.compact-message.error { color: #ffb5ac; }
+.replacement-row { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto; gap: 8px; margin-bottom: 10px; }
+.replacement-row input { width: 100%; min-width: 0; }
+.transcript-actions { display: flex; gap: 8px; margin: 8px 0; }
+.history-entry { border-top: 1px solid #7774; padding: 12px 0; }
+.setting-row input[type="number"] { width: 90px; }

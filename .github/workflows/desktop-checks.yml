@@ -1,0 +1,25 @@
+name: Desktop checks
+on:
+  push:
+    branches: [feature/optional-dictation-controls]
+  pull_request:
+    paths: ['stt-tauri/**', '.github/workflows/desktop-checks.yml']
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: stt-tauri
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: stt-tauri/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings
