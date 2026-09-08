@@ -2,7 +2,7 @@ use std::{
     ffi::{c_char, c_void, CStr, CString},
     path::Path,
     ptr,
-    sync::Arc,
+    sync::{Arc, OnceLock},
 };
 
 use libloading::{Library, Symbol};
@@ -434,8 +434,11 @@ impl Drop for NemotronSession {
 }
 
 fn clean_text(text: &str) -> String {
-    let tags = Regex::new(r"\s*<[a-z]{2}(?:-[A-Z]{2})?>\s*").expect("valid regex");
-    tags.replace_all(text, " ").trim().to_string()
+    static TAGS: OnceLock<Regex> = OnceLock::new();
+    TAGS.get_or_init(|| Regex::new(r"\s*<[a-z]{2}(?:-[A-Z]{2})?>\s*").expect("valid regex"))
+        .replace_all(text, " ")
+        .trim()
+        .to_string()
 }
 
 pub fn language_id(language: &str) -> Option<i32> {

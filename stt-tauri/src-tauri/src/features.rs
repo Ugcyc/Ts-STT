@@ -37,6 +37,10 @@ impl PerformanceReport {
     }
 }
 
+pub fn should_auto_stop(enabled: bool, has_text: bool, silent_seconds: f32, timeout: f32) -> bool {
+    enabled && has_text && silent_seconds >= timeout
+}
+
 // Hold the last two words inside the preview; only the settled prefix is injected.
 pub fn settled_prefix(text: &str) -> String {
     let starts: Vec<usize> = text
@@ -150,6 +154,13 @@ pub fn atomic_write(path: &Path, data: &[u8]) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn thinking_pauses_never_stop_when_auto_stop_is_off() {
+        assert!(!should_auto_stop(false, true, 3600.0, 2.0));
+        assert!(!should_auto_stop(true, false, 3600.0, 2.0));
+        assert!(!should_auto_stop(true, true, 59.9, 60.0));
+        assert!(should_auto_stop(true, true, 60.0, 60.0));
+    }
     #[test]
     fn commands_are_whole_words_case_insensitive_and_preserve_paragraphs() {
         assert_eq!(

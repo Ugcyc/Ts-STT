@@ -76,6 +76,11 @@ impl OutputWorker {
                             check()?;
                             enigo.key_click(Key::Backspace);
                         }
+                        if delay == 0 && target.is_none() {
+                            check()?;
+                            enigo.key_sequence(&text.chars().skip(prefix).collect::<String>());
+                            return check();
+                        }
                         let mut buffer = [0; 4];
                         for c in text.chars().skip(prefix) {
                             check()?;

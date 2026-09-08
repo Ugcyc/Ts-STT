@@ -180,7 +180,7 @@ enum ModelCommand {
         model_path: PathBuf,
         runtime_dll: PathBuf,
         config: Box<AppConfig>,
-        app: AppHandle,
+        app: Box<AppHandle>,
         session_id: usize,
         destination: Result<Option<focus::Destination>, String>,
         response: mpsc::Sender<Result<(), String>>,
@@ -246,7 +246,7 @@ impl ModelHandle {
                 model_path,
                 runtime_dll,
                 config: Box::new(config),
-                app,
+                app: Box::new(app),
                 session_id,
                 destination,
                 response: tx,
@@ -353,6 +353,7 @@ fn model_worker(
                 destination,
                 response,
             } => {
+                let handle = *handle;
                 session = None;
                 output = None;
                 config = *new_config;
@@ -429,8 +430,10 @@ fn model_worker(
                         let t = Instant::now();
                         match active.push(&audio) {
                             Ok(raw) => {
-                                last_raw = raw;
-                                last_text = format_transcript(&config, &last_raw);
+                                if raw != last_raw {
+                                    last_raw = raw;
+                                    last_text = format_transcript(&config, &last_raw);
+                                }
                                 if report.first_text_ms.is_none() && !last_text.is_empty() {
                                     report.first_text_ms =
                                         Some(started.elapsed().as_millis() as u64);
@@ -447,10 +450,12 @@ fn model_worker(
                                         }
                                     }
                                 }
-                                if config.auto_stop_enabled
-                                    && !last_text.is_empty()
-                                    && active.silent_seconds() >= config.silence_timeout_secs
-                                    && !stop_requested
+                                if features::should_auto_stop(
+                                    config.auto_stop_enabled,
+                                    !last_text.is_empty(),
+                                    active.silent_seconds(),
+                                    config.silence_timeout_secs,
+                                ) && !stop_requested
                                 {
                                     stop_requested = true;
                                     if let Some(handle) = &app {
@@ -506,6 +511,11 @@ fn model_worker(
                 report.finish_ms = t.elapsed().as_millis() as u64;
                 report.inference_ms += report.finish_ms;
                 report.overflowed |= overflow.load(Ordering::SeqCst);
+                if report.overflowed && warning.is_none() {
+                    warning = Some(
+                        "Audio processing fell behind; this transcript may be incomplete.".into(),
+                    );
+                }
                 if let Some(writer) = output.take() {
                     if warning.is_none() {
                         if let Err(e) = writer.finish(last_text.clone()) {

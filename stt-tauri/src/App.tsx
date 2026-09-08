@@ -10,7 +10,12 @@ import {
 import "./App.css";
 
 type Replacement = { heard: string; replacement: string };
-type TranscriptEntry = { id: string; created_at: number; text: string; seconds: number };
+type TranscriptEntry = {
+  id: string;
+  created_at: number;
+  text: string;
+  seconds: number;
+};
 
 type AppConfig = {
   hotkey: string;
@@ -119,7 +124,12 @@ function normalizeHotkey(input: string): string {
       }
       if (part === "shift") return "Shift";
       if (part === "alt" || part === "option") return "Alt";
-      if (part === "meta" || part === "cmd" || part === "command" || part === "super") {
+      if (
+        part === "meta" ||
+        part === "cmd" ||
+        part === "command" ||
+        part === "super"
+      ) {
         return "Super";
       }
       if (part === "space" || part === "spacebar") return "Space";
@@ -141,7 +151,10 @@ function hotkeyCandidates(input: string): string[] {
 function formatBytes(bytes: number): string {
   if (!bytes) return "0 B";
   const units = ["B", "KB", "MB", "GB"];
-  const unit = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const unit = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
   return `${(bytes / 1024 ** unit).toFixed(unit > 1 ? 1 : 0)} ${units[unit]}`;
 }
 
@@ -212,7 +225,8 @@ function App() {
   const [hotkeyReady, setHotkeyReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
-  const [downloadProgress, setDownloadProgress] = useState<DownloadProgress | null>(null);
+  const [downloadProgress, setDownloadProgress] =
+    useState<DownloadProgress | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [savedConfig, setSavedConfig] = useState<AppConfig>(defaultConfig);
   const [capturingHotkey, setCapturingHotkey] = useState(false);
@@ -256,18 +270,29 @@ function App() {
     const unlisteners: (() => void)[] = [];
     const subscriptions = [
       listen<DownloadProgress>("download-progress", (event) => {
-        setDownloadProgress(event.payload); setInfo(event.payload.message);
+        setDownloadProgress(event.payload);
+        setInfo(event.payload.message);
       }),
       listen<string>("dictation-preview", (event) => setPreview(event.payload)),
       listen<string>("dictation-warning", (event) => setError(event.payload)),
       listen<TranscriptionResponse>("dictation-completed", (event) => {
-        applyTranscript(event.payload); setStatus("Idle"); setIsRecording(false); isRecordingRef.current = false;
+        applyTranscript(event.payload);
+        setStatus("Idle");
+        setIsRecording(false);
+        isRecordingRef.current = false;
       }),
     ];
     for (const subscription of subscriptions) {
-      void subscription.then((unlisten) => { if (disposed) unlisten(); else unlisteners.push(unlisten); });
+      void subscription.then((unlisten) => {
+        if (disposed) unlisten();
+        else unlisteners.push(unlisten);
+      });
     }
-    return () => { disposed = true; void unregisterAll(); unlisteners.forEach((fn) => fn()); };
+    return () => {
+      disposed = true;
+      void unregisterAll();
+      unlisteners.forEach((fn) => fn());
+    };
   }, []);
 
   useEffect(() => {
@@ -298,9 +323,23 @@ function App() {
     const message = Boolean(error || info);
     const showPreview = Boolean(savedConfig.live_preview && preview);
     const showRecovery = hasLastTranscript && !isRecording;
-    const height = 58 + (message ? 84 : 0) + (showPreview ? 84 : 0) + (showRecovery ? 36 : 0);
-    void getCurrentWindow().setSize(new LogicalSize(height > 58 ? 320 : 210,height)).catch(() => {});
-  },[settingsOpen,error,info,preview,savedConfig.live_preview,hasLastTranscript,isRecording]);
+    const height =
+      58 +
+      (message ? 84 : 0) +
+      (showPreview ? 84 : 0) +
+      (showRecovery ? 36 : 0);
+    void getCurrentWindow()
+      .setSize(new LogicalSize(height > 58 ? 320 : 210, height))
+      .catch(() => {});
+  }, [
+    settingsOpen,
+    error,
+    info,
+    preview,
+    savedConfig.live_preview,
+    hasLastTranscript,
+    isRecording,
+  ]);
 
   const registerHotkey = async (hotkey: string) => {
     setError(null);
@@ -350,12 +389,15 @@ function App() {
       if (wasRecording) {
         setStatus("Transcribing");
       }
-      const result = await invoke<ToggleResponse>("toggle_recording_and_process");
+      const result = await invoke<ToggleResponse>(
+        "toggle_recording_and_process",
+      );
       applyToggleResult(result);
     } catch (err) {
       setError(String(err));
       setStatus("Idle");
-      setIsRecording(false); isRecordingRef.current = false;
+      setIsRecording(false);
+      isRecordingRef.current = false;
     } finally {
       hotkeyInFlight.current = false;
       setBusy(false);
@@ -375,10 +417,14 @@ function App() {
   };
 
   const applyTranscript = (transcript: TranscriptionResponse) => {
-    setFinalText(transcript.final_text); setRawText(transcript.raw_text); setPreview("");
+    setFinalText(transcript.final_text);
+    setRawText(transcript.raw_text);
+    setPreview("");
     if (transcript.final_text) setHasLastTranscript(true);
     if (transcript.warning) setError(transcript.warning);
-    void invoke<TranscriptEntry[]>("get_transcript_history").then(setHistory).catch((e) => setError(String(e)));
+    void invoke<TranscriptEntry[]>("get_transcript_history")
+      .then(setHistory)
+      .catch((e) => setError(String(e)));
   };
 
   const handleStart = async () => {
@@ -394,11 +440,13 @@ function App() {
         device_name: config.mic_device,
       });
       setStatus("Listening");
-      setIsRecording(true); isRecordingRef.current = true;
+      setIsRecording(true);
+      isRecordingRef.current = true;
     } catch (err) {
       setError(String(err));
       setStatus("Idle");
-      setIsRecording(false); isRecordingRef.current = false;
+      setIsRecording(false);
+      isRecordingRef.current = false;
     } finally {
       setBusy(false);
       hotkeyInFlight.current = false;
@@ -413,9 +461,12 @@ function App() {
     setInfo(null);
     try {
       setStatus("Transcribing");
-      const result = await invoke<TranscriptionResponse>("stop_recording_and_process");
+      const result = await invoke<TranscriptionResponse>(
+        "stop_recording_and_process",
+      );
       setStatus("Idle");
-      setIsRecording(false); isRecordingRef.current = false;
+      setIsRecording(false);
+      isRecordingRef.current = false;
       applyTranscript(result);
       if (!result.final_text) {
         setInfo("No speech detected.");
@@ -423,7 +474,8 @@ function App() {
     } catch (err) {
       setError(String(err));
       setStatus("Idle");
-      setIsRecording(false); isRecordingRef.current = false;
+      setIsRecording(false);
+      isRecordingRef.current = false;
     } finally {
       setBusy(false);
       hotkeyInFlight.current = false;
@@ -493,20 +545,49 @@ function App() {
     }
   };
 
-  const transcriptAction = async (action: "copy_transcript" | "reinsert_transcript", id: string | null = null) => {
+  const transcriptAction = async (
+    action: "copy_transcript" | "reinsert_transcript",
+    id: string | null = null,
+  ) => {
     if (hotkeyInFlight.current) return;
-    hotkeyInFlight.current = true; setBusy(true); setError(null);
-    setInfo(action === "reinsert_transcript" ? "Switch to your text field. Pasting in 3 seconds…" : null);
-    try { await invoke(action, { id }); setInfo(action === "copy_transcript" ? "Transcript copied." : "Transcript pasted."); }
-    catch (e) { setError(String(e)); }
-    finally { setBusy(false); hotkeyInFlight.current = false; }
+    hotkeyInFlight.current = true;
+    setBusy(true);
+    setError(null);
+    setInfo(
+      action === "reinsert_transcript"
+        ? "Switch to your text field. Pasting in 3 seconds…"
+        : null,
+    );
+    try {
+      await invoke(action, { id });
+      setInfo(
+        action === "copy_transcript"
+          ? "Transcript copied."
+          : "Transcript pasted.",
+      );
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+      hotkeyInFlight.current = false;
+    }
   };
   const clearHistory = async () => {
-    try { await invoke("clear_transcript_history"); setHistory([]); setHasLastTranscript(false); setFinalText(""); setRawText(""); }
-    catch(e) { setError(String(e)); }
+    try {
+      await invoke("clear_transcript_history");
+      setHistory([]);
+      setHasLastTranscript(false);
+      setFinalText("");
+      setRawText("");
+    } catch (e) {
+      setError(String(e));
+    }
   };
 
-  const updateConfig = <K extends keyof AppConfig>(key: K, value: AppConfig[K]) => {
+  const updateConfig = <K extends keyof AppConfig>(
+    key: K,
+    value: AppConfig[K],
+  ) => {
     setConfig((prev) => ({ ...prev, [key]: value }));
   };
 
@@ -531,7 +612,12 @@ function App() {
       return;
     }
 
-    const main = e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+    const main =
+      e.key === " "
+        ? "Space"
+        : e.key.length === 1
+          ? e.key.toUpperCase()
+          : e.key;
     updateConfig("hotkey", [...mods, main].join("+"));
     setInfo(null);
     e.currentTarget.blur();
@@ -539,7 +625,9 @@ function App() {
 
   const dirty = JSON.stringify(config) !== JSON.stringify(savedConfig);
   const liveTypingAvailable = config.output_mode === "type" && config.streaming;
-  const outputModeDesc = OUTPUT_MODES.find((m) => m.value === config.output_mode)?.desc;
+  const outputModeDesc = OUTPUT_MODES.find(
+    (m) => m.value === config.output_mode,
+  )?.desc;
 
   const lower = status.toLowerCase();
   const capsuleTone = lower.includes("listen")
@@ -555,53 +643,83 @@ function App() {
   const theme = config.theme === "light" ? "light" : "dark";
   const itemPercent =
     downloadProgress?.bytesTotal && downloadProgress.bytesTotal > 0
-      ? Math.min(100, (downloadProgress.bytesDownloaded / downloadProgress.bytesTotal) * 100)
+      ? Math.min(
+          100,
+          (downloadProgress.bytesDownloaded / downloadProgress.bytesTotal) *
+            100,
+        )
       : null;
 
   return (
-    <main className={`app-shell ${settingsOpen ? "expanded" : "compact"} theme-${theme}`}>
+    <main
+      className={`app-shell ${settingsOpen ? "expanded" : "compact"} theme-${theme}`}
+    >
       {!settingsOpen ? (
-        <div className="compact-stack"><section
-          className={`capsule ${capsuleTone}`}
-          data-tauri-drag-region
-        >
-          <button className="mic-button" onClick={isRecording ? handleStop : handleStart} disabled={busy}>
-            <svg
-              className="mic-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+        <div className="compact-stack">
+          <section className={`capsule ${capsuleTone}`} data-tauri-drag-region>
+            <button
+              className="mic-button"
+              onClick={isRecording ? handleStop : handleStart}
+              disabled={busy}
             >
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
-              <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-              <line x1="12" y1="19" x2="12" y2="22"></line>
-            </svg>
-          </button>
-          <span className="status-text" data-tauri-drag-region>{error ? "Needs attention" : compactText}</span>
-          <button
-            className="capsule-settings"
-            onClick={() => setSettingsOpen(true)}
-            disabled={busy}
-            title="Open settings"
-            aria-label="Open settings"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
-              <line x1="4" y1="6" x2="20" y2="6" />
-              <circle cx="9" cy="6" r="1.8" />
-              <line x1="4" y1="12" x2="20" y2="12" />
-              <circle cx="15" cy="12" r="1.8" />
-              <line x1="4" y1="18" x2="20" y2="18" />
-              <circle cx="11" cy="18" r="1.8" />
-            </svg>
-          </button>
-        </section>
-        {error && <div className="compact-message error" role="alert">{error}</div>}
-        {!error && info && <div className="compact-message" role="status">{info}</div>}
-        {savedConfig.live_preview && preview && <div className="compact-preview" aria-live="polite">{preview}</div>}
-        {hasLastTranscript && !isRecording && <button className="field-action" disabled={busy} onClick={() => transcriptAction("copy_transcript")}>Copy last dictation</button>}
+              <svg
+                className="mic-icon"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="22"></line>
+              </svg>
+            </button>
+            <span className="status-text" data-tauri-drag-region>
+              {error ? "Needs attention" : compactText}
+            </span>
+            <button
+              className="capsule-settings"
+              onClick={() => setSettingsOpen(true)}
+              disabled={busy}
+              title="Open settings"
+              aria-label="Open settings"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true" fill="none">
+                <line x1="4" y1="6" x2="20" y2="6" />
+                <circle cx="9" cy="6" r="1.8" />
+                <line x1="4" y1="12" x2="20" y2="12" />
+                <circle cx="15" cy="12" r="1.8" />
+                <line x1="4" y1="18" x2="20" y2="18" />
+                <circle cx="11" cy="18" r="1.8" />
+              </svg>
+            </button>
+          </section>
+          {error && (
+            <div className="compact-message error" role="alert">
+              {error}
+            </div>
+          )}
+          {!error && info && (
+            <div className="compact-message" role="status">
+              {info}
+            </div>
+          )}
+          {savedConfig.live_preview && preview && (
+            <div className="compact-preview" aria-live="polite">
+              {preview}
+            </div>
+          )}
+          {hasLastTranscript && !isRecording && (
+            <button
+              className="field-action"
+              disabled={busy}
+              onClick={() => transcriptAction("copy_transcript")}
+            >
+              Copy last dictation
+            </button>
+          )}
         </div>
       ) : (
         <section className="mini-card expanded">
@@ -614,7 +732,10 @@ function App() {
               <button
                 className="ghost-btn"
                 onClick={() =>
-                  updateConfig("theme", config.theme === "light" ? "dark" : "light")
+                  updateConfig(
+                    "theme",
+                    config.theme === "light" ? "dark" : "light",
+                  )
                 }
                 disabled={busy}
               >
@@ -627,7 +748,11 @@ function App() {
               >
                 {dirty ? "Save changes" : "Saved"}
               </button>
-              <button className="ghost-btn" onClick={() => setSettingsOpen(false)} disabled={busy}>
+              <button
+                className="ghost-btn"
+                onClick={() => setSettingsOpen(false)}
+                disabled={busy}
+              >
                 Close
               </button>
             </div>
@@ -649,7 +774,9 @@ function App() {
             <span className={`badge ${modelExists ? "ok" : "warn"}`}>
               Model {modelExists ? "Ready" : "Missing"}
             </span>
-            <span className={`badge ${status.toLowerCase().includes("transcrib") ? "live" : ""}`}>
+            <span
+              className={`badge ${status.toLowerCase().includes("transcrib") ? "live" : ""}`}
+            >
               {status}
             </span>
           </div>
@@ -661,11 +788,20 @@ function App() {
               <div className="download-progress-head">
                 <strong>{downloadProgress.message}</strong>
                 <span>
-                  File {downloadProgress.itemIndex} of {downloadProgress.itemCount}
+                  File {downloadProgress.itemIndex} of{" "}
+                  {downloadProgress.itemCount}
                 </span>
               </div>
-              <div className={`progress-track ${itemPercent === null ? "indeterminate" : ""}`}>
-                <span style={itemPercent === null ? undefined : { width: `${itemPercent}%` }} />
+              <div
+                className={`progress-track ${itemPercent === null ? "indeterminate" : ""}`}
+              >
+                <span
+                  style={
+                    itemPercent === null
+                      ? undefined
+                      : { width: `${itemPercent}%` }
+                  }
+                />
               </div>
               <div className="download-progress-detail">
                 <span>{downloadProgress.item}</span>
@@ -697,7 +833,11 @@ function App() {
                 <div className="setting-control">
                   <input
                     className={`hotkey-input ${capturingHotkey ? "capturing" : ""}`}
-                    value={capturingHotkey ? "Press keys..." : prettyHotkey(config.hotkey)}
+                    value={
+                      capturingHotkey
+                        ? "Press keys..."
+                        : prettyHotkey(config.hotkey)
+                    }
                     onKeyDown={handleHotkeyCapture}
                     onFocus={() => setCapturingHotkey(true)}
                     onBlur={() => setCapturingHotkey(false)}
@@ -716,7 +856,9 @@ function App() {
               <div className="setting-row">
                 <div className="setting-text">
                   <span className="setting-label">Microphone</span>
-                  <span className="setting-desc">Input device used for recording</span>
+                  <span className="setting-desc">
+                    Input device used for recording
+                  </span>
                 </div>
                 <div className="setting-control">
                   <select
@@ -724,7 +866,9 @@ function App() {
                     onChange={(e) =>
                       updateConfig(
                         "mic_device",
-                        e.currentTarget.value === "Default" ? null : e.currentTarget.value,
+                        e.currentTarget.value === "Default"
+                          ? null
+                          : e.currentTarget.value,
                       )
                     }
                   >
@@ -735,7 +879,11 @@ function App() {
                       </option>
                     ))}
                   </select>
-                  <button className="field-action" onClick={handleRefreshDevices} disabled={busy}>
+                  <button
+                    className="field-action"
+                    onClick={handleRefreshDevices}
+                    disabled={busy}
+                  >
                     Refresh
                   </button>
                 </div>
@@ -743,26 +891,219 @@ function App() {
             </section>
 
             <section className="settings-group">
-              <h3 className="settings-group-title">Optional dictation features</h3>
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Protect the destination</span><span className="setting-desc">{protectedSupported ? "Pause insertion if you change apps, click, or type. Start and stop with your hotkey." : "Protected insertion is Windows-only. Turn off to allow insertion on this platform, or use Clipboard mode."}</span></div><Toggle checked={config.protect_destination} onChange={v => updateConfig("protect_destination",v)} label="Protect the destination" /></div>
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Live transcript preview</span><span className="setting-desc">Show recognized words in the overlay without typing into another app.</span></div><Toggle checked={config.live_preview} onChange={v => updateConfig("live_preview",v)} label="Live transcript preview" /></div>
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Hold back unfinished words</span><span className="setting-desc">Keep the last two words in the preview until more speech arrives. Finish inserts everything.</span></div><Toggle checked={config.stable_live_text} onChange={v => updateConfig("stable_live_text",v)} label="Hold back unfinished words" /></div>
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Filter long silences</span><span className="setting-desc">Use local speech detection to skip extended silence. Does not stop recording by itself.</span></div><Toggle checked={config.vad_enabled} onChange={v => setConfig(prev => ({...prev,vad_enabled:v,auto_stop_enabled:v && prev.auto_stop_enabled}))} label="Filter long silences" /></div>
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Stop after silence</span><span className="setting-desc">Off by default so you can pause to think. Starts counting after speech and the detection grace period.</span></div><Toggle checked={config.auto_stop_enabled} disabled={!config.vad_enabled} onChange={v => updateConfig("auto_stop_enabled",v)} label="Stop after silence" /></div>
-              {config.auto_stop_enabled && <div className="setting-row"><label htmlFor="silence-seconds">Silence timeout (seconds)</label><input id="silence-seconds" type="number" min={2} max={600} value={config.silence_timeout_secs} onChange={e => updateConfig("silence_timeout_secs",Number(e.target.value))} /></div>}
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Save local transcript history</span><span className="setting-desc">Optional text-only history on this device. No audio is saved. Turning this off and saving deletes the stored history.</span></div><Toggle checked={config.history_enabled} onChange={v => updateConfig("history_enabled",v)} label="Save local transcript history" /></div>
-              {config.history_enabled && <div className="setting-row"><label htmlFor="history-limit">Transcripts to keep</label><input id="history-limit" type="number" min={1} max={100} value={config.history_limit} onChange={e => updateConfig("history_limit",Number(e.target.value))} /></div>}
+              <h3 className="settings-group-title">
+                Optional dictation features
+              </h3>
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Protect the destination</span>
+                  <span className="setting-desc">
+                    {protectedSupported
+                      ? "Pause insertion if you change apps, click, or type. Start and stop with your hotkey."
+                      : "Protected insertion is Windows-only. Turn off to allow insertion on this platform, or use Clipboard mode."}
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.protect_destination}
+                  onChange={(v) => updateConfig("protect_destination", v)}
+                  label="Protect the destination"
+                />
+              </div>
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Live transcript preview</span>
+                  <span className="setting-desc">
+                    Show recognized words in the overlay without typing into
+                    another app.
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.live_preview}
+                  onChange={(v) => updateConfig("live_preview", v)}
+                  label="Live transcript preview"
+                />
+              </div>
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">
+                    Hold back unfinished words
+                  </span>
+                  <span className="setting-desc">
+                    Delay inserting the last two words until more speech
+                    arrives. Stopping inserts everything.
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.stable_live_text}
+                  onChange={(v) => updateConfig("stable_live_text", v)}
+                  label="Hold back unfinished words"
+                />
+              </div>
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Filter long silences</span>
+                  <span className="setting-desc">
+                    Use local speech detection to skip extended silence. Does
+                    not stop recording by itself.
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.vad_enabled}
+                  onChange={(v) =>
+                    setConfig((prev) => ({
+                      ...prev,
+                      vad_enabled: v,
+                      auto_stop_enabled: v && prev.auto_stop_enabled,
+                    }))
+                  }
+                  label="Filter long silences"
+                />
+              </div>
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Stop after silence</span>
+                  <span className="setting-desc">
+                    Off by default so you can pause to think. Starts counting
+                    after speech and the detection grace period.
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.auto_stop_enabled}
+                  disabled={!config.vad_enabled}
+                  onChange={(v) => updateConfig("auto_stop_enabled", v)}
+                  label="Stop after silence"
+                />
+              </div>
+              {config.auto_stop_enabled && (
+                <div className="setting-row">
+                  <label htmlFor="silence-seconds">
+                    Silence timeout (seconds)
+                  </label>
+                  <input
+                    id="silence-seconds"
+                    type="number"
+                    min={2}
+                    max={600}
+                    value={config.silence_timeout_secs}
+                    onChange={(e) =>
+                      updateConfig(
+                        "silence_timeout_secs",
+                        Number(e.target.value),
+                      )
+                    }
+                  />
+                </div>
+              )}
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">
+                    Save local transcript history
+                  </span>
+                  <span className="setting-desc">
+                    Optional text-only history on this device. No audio is
+                    saved. Turning this off and saving deletes the stored
+                    history.
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.history_enabled}
+                  onChange={(v) => updateConfig("history_enabled", v)}
+                  label="Save local transcript history"
+                />
+              </div>
+              {config.history_enabled && (
+                <div className="setting-row">
+                  <label htmlFor="history-limit">Transcripts to keep</label>
+                  <input
+                    id="history-limit"
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={config.history_limit}
+                    onChange={(e) =>
+                      updateConfig("history_limit", Number(e.target.value))
+                    }
+                  />
+                </div>
+              )}
             </section>
             <section className="settings-group">
               <h3 className="settings-group-title">Your phrase replacements</h3>
-              <div className="setting-row"><div className="setting-text"><span className="setting-label">Apply replacements</span><span className="setting-desc">Only phrases you add here. Matches whole phrases, ignoring capitalization.</span></div><Toggle checked={config.replacements_enabled} onChange={v => updateConfig("replacements_enabled",v)} label="Apply replacements" /></div>
-              {config.replacements.length === 0 && <p className="field-hint">No replacements added.</p>}
-              {config.replacements.map((rule,index) => <div className="replacement-row" key={index}>
-                <input aria-label={`Heard phrase ${index+1}`} placeholder="What it hears" value={rule.heard} maxLength={200} onChange={e => updateConfig("replacements",config.replacements.map((r,i) => i===index ? {...r,heard:e.target.value} : r))} />
-                <input aria-label={`Replacement ${index+1}`} placeholder="What to write" value={rule.replacement} maxLength={2000} onChange={e => updateConfig("replacements",config.replacements.map((r,i) => i===index ? {...r,replacement:e.target.value} : r))} />
-                <button className="field-action" aria-label={`Remove replacement ${index+1}`} onClick={() => updateConfig("replacements",config.replacements.filter((_,i) => i!==index))}>Remove</button>
-              </div>)}
-              <button className="field-action" disabled={config.replacements.length >= 200} onClick={() => updateConfig("replacements",[...config.replacements,{heard:"",replacement:""}])}>Add replacement</button>
+              <div className="setting-row">
+                <div className="setting-text">
+                  <span className="setting-label">Apply replacements</span>
+                  <span className="setting-desc">
+                    Only phrases you add here. Matches whole phrases, ignoring
+                    capitalization.
+                  </span>
+                </div>
+                <Toggle
+                  checked={config.replacements_enabled}
+                  onChange={(v) => updateConfig("replacements_enabled", v)}
+                  label="Apply replacements"
+                />
+              </div>
+              {config.replacements.length === 0 && (
+                <p className="field-hint">No replacements added.</p>
+              )}
+              {config.replacements.map((rule, index) => (
+                <div className="replacement-row" key={index}>
+                  <input
+                    aria-label={`Heard phrase ${index + 1}`}
+                    placeholder="What it hears"
+                    value={rule.heard}
+                    maxLength={200}
+                    onChange={(e) =>
+                      updateConfig(
+                        "replacements",
+                        config.replacements.map((r, i) =>
+                          i === index ? { ...r, heard: e.target.value } : r,
+                        ),
+                      )
+                    }
+                  />
+                  <input
+                    aria-label={`Replacement ${index + 1}`}
+                    placeholder="What to write"
+                    value={rule.replacement}
+                    maxLength={2000}
+                    onChange={(e) =>
+                      updateConfig(
+                        "replacements",
+                        config.replacements.map((r, i) =>
+                          i === index
+                            ? { ...r, replacement: e.target.value }
+                            : r,
+                        ),
+                      )
+                    }
+                  />
+                  <button
+                    className="field-action"
+                    aria-label={`Remove replacement ${index + 1}`}
+                    onClick={() =>
+                      updateConfig(
+                        "replacements",
+                        config.replacements.filter((_, i) => i !== index),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                className="field-action"
+                disabled={config.replacements.length >= 200}
+                onClick={() =>
+                  updateConfig("replacements", [
+                    ...config.replacements,
+                    { heard: "", replacement: "" },
+                  ])
+                }
+              >
+                Add replacement
+              </button>
             </section>
             <section className="settings-group">
               <h3 className="settings-group-title">Speech Model</h3>
@@ -770,9 +1111,15 @@ function App() {
                 <div className="model-card-row">
                   <div>
                     <strong>Nemotron 3.5 ASR Streaming</strong>
-                    <small className="field-hint">Local 0.6B ONNX Runtime GenAI model</small>
+                    <small className="field-hint">
+                      Local 0.6B ONNX Runtime GenAI model
+                    </small>
                   </div>
-                  <button className="field-action" onClick={handleDownloadModel} disabled={busy}>
+                  <button
+                    className="field-action"
+                    onClick={handleDownloadModel}
+                    disabled={busy}
+                  >
                     {busy && downloadProgress
                       ? "Downloading..."
                       : modelExists
@@ -780,7 +1127,9 @@ function App() {
                         : "Download Nemotron"}
                   </button>
                 </div>
-                <span className={`model-state ${modelExists ? "ready" : "missing"}`}>
+                <span
+                  className={`model-state ${modelExists ? "ready" : "missing"}`}
+                >
                   {modelExists ? "Installed and ready" : "Not installed"}
                 </span>
                 <div className="model-facts">
@@ -800,7 +1149,9 @@ function App() {
                 </div>
                 <select
                   value={config.model_keep}
-                  onChange={(e) => updateConfig("model_keep", e.currentTarget.value)}
+                  onChange={(e) =>
+                    updateConfig("model_keep", e.currentTarget.value)
+                  }
                 >
                   <option value="always">Always (fastest)</option>
                   <option value="15min">For 15 min after use</option>
@@ -818,7 +1169,11 @@ function App() {
                   <span className="setting-label">Where the text goes</span>
                   <span className="setting-desc">{outputModeDesc}</span>
                 </div>
-                <div className="segmented" role="radiogroup" aria-label="Output mode">
+                <div
+                  className="segmented"
+                  role="radiogroup"
+                  aria-label="Output mode"
+                >
                   {OUTPUT_MODES.map((mode) => (
                     <button
                       key={mode.value}
@@ -845,7 +1200,9 @@ function App() {
                 </div>
                 <select
                   value={config.key_delay_ms}
-                  onChange={(e) => updateConfig("key_delay_ms", Number(e.currentTarget.value))}
+                  onChange={(e) =>
+                    updateConfig("key_delay_ms", Number(e.currentTarget.value))
+                  }
                   disabled={config.output_mode !== "type"}
                 >
                   <option value={0}>Instant</option>
@@ -877,13 +1234,18 @@ function App() {
                   <div className="setting-text">
                     <span className="setting-label">Typing delay</span>
                     <span className="setting-desc">
-                      How long to wait before new words appear; longer delays make fewer
-                      visible corrections
+                      How long to wait before new words appear; longer delays
+                      make fewer visible corrections
                     </span>
                   </div>
                   <select
                     value={config.live_update_ms}
-                    onChange={(e) => updateConfig("live_update_ms", Number(e.currentTarget.value))}
+                    onChange={(e) =>
+                      updateConfig(
+                        "live_update_ms",
+                        Number(e.currentTarget.value),
+                      )
+                    }
                   >
                     <option value={560}>Short (560 ms)</option>
                     <option value={1120}>Medium (1120 ms)</option>
@@ -899,11 +1261,15 @@ function App() {
               <div className="setting-row">
                 <div className="setting-text">
                   <span className="setting-label">Language</span>
-                  <span className="setting-desc">Language you will be speaking</span>
+                  <span className="setting-desc">
+                    Language you will be speaking
+                  </span>
                 </div>
                 <select
                   value={config.language}
-                  onChange={(e) => updateConfig("language", e.currentTarget.value)}
+                  onChange={(e) =>
+                    updateConfig("language", e.currentTarget.value)
+                  }
                 >
                   <option value="en-US">English (US)</option>
                   <option value="en-GB">English (UK)</option>
@@ -923,7 +1289,8 @@ function App() {
                 <div className="setting-text">
                   <span className="setting-label">Streaming</span>
                   <span className="setting-desc">
-                    Enable live typing while speaking. Audio always processes in the background to avoid a large backlog.
+                    Enable live typing while speaking. Audio always processes in
+                    the background to avoid a large backlog.
                   </span>
                 </div>
                 <Toggle
@@ -942,7 +1309,9 @@ function App() {
                 </div>
                 <Toggle
                   checked={config.spoken_punctuation}
-                  onChange={(value) => updateConfig("spoken_punctuation", value)}
+                  onChange={(value) =>
+                    updateConfig("spoken_punctuation", value)
+                  }
                   label="Spoken punctuation"
                 />
               </div>
@@ -953,14 +1322,18 @@ function App() {
                 className="advanced-toggle"
                 onClick={() => setShowAdvanced((value) => !value)}
               >
-                {showAdvanced ? "Hide advanced settings" : "Show advanced settings"}
+                {showAdvanced
+                  ? "Hide advanced settings"
+                  : "Show advanced settings"}
               </button>
 
               {showAdvanced && (
                 <>
                   <div className="setting-row column">
                     <div className="setting-text">
-                      <span className="setting-label">Custom model directory</span>
+                      <span className="setting-label">
+                        Custom model directory
+                      </span>
                       <span className="setting-desc">
                         Leave empty to use the managed Nemotron download
                       </span>
@@ -979,17 +1352,23 @@ function App() {
                     <div className="setting-text">
                       <span className="setting-label">Performance report</span>
                       <span className="setting-desc">
-                        Copies measured load time, inference time, first-text delay, and audio backlog for the last dictation
+                        Copies measured load time, inference time, first-text
+                        delay, and audio backlog for the last dictation
                       </span>
                     </div>
-                    <button className="field-action" onClick={handleCopyPerfLogs} disabled={busy}>
+                    <button
+                      className="field-action"
+                      onClick={handleCopyPerfLogs}
+                      disabled={busy}
+                    >
                       Copy
                     </button>
                   </div>
 
                   <div className="paths">
                     <div>
-                      <strong>Backend:</strong> Nemotron 3.5 ASR Streaming ONNX INT4
+                      <strong>Backend:</strong> Nemotron 3.5 ASR Streaming ONNX
+                      INT4
                     </div>
                     <div>
                       <strong>App version:</strong> 0.4.0
@@ -1001,14 +1380,73 @@ function App() {
 
             <section className="transcript settings-group">
               <h3 className="settings-group-title">Last Transcript</h3>
-              {savedConfig.live_preview && preview && <pre aria-live="polite">{preview}</pre>}
-              <div className="transcript-actions"><button className="field-action" disabled={!hasLastTranscript || busy} onClick={() => transcriptAction("copy_transcript")}>Copy last</button><button className="field-action" disabled={!hasLastTranscript || busy || isRecording} onClick={() => transcriptAction("reinsert_transcript")}>Reinsert in 3 seconds</button></div>
+              {savedConfig.live_preview && preview && (
+                <pre aria-live="polite">{preview}</pre>
+              )}
+              <div className="transcript-actions">
+                <button
+                  className="field-action"
+                  disabled={!hasLastTranscript || busy}
+                  onClick={() => transcriptAction("copy_transcript")}
+                >
+                  Copy last
+                </button>
+                <button
+                  className="field-action"
+                  disabled={!hasLastTranscript || busy || isRecording}
+                  onClick={() => transcriptAction("reinsert_transcript")}
+                >
+                  Reinsert in 3 seconds
+                </button>
+              </div>
               <h3>Final</h3>
               <pre>{finalText || "(empty)"}</pre>
               <h3>Raw</h3>
               <pre>{rawText || "(empty)"}</pre>
-              {history.length > 0 && <><h3>Saved on this device</h3>{history.map(entry => <article key={entry.id} className="history-entry"><small>{new Date(entry.created_at*1000).toLocaleString()}</small><pre>{entry.text}</pre><div className="transcript-actions"><button className="field-action" disabled={busy} onClick={() => transcriptAction("copy_transcript",entry.id)}>Copy</button><button className="field-action" disabled={busy || isRecording} onClick={() => transcriptAction("reinsert_transcript",entry.id)}>Reinsert in 3 seconds</button></div></article>)}</>}
-              <button className="field-action" disabled={busy || isRecording || (!hasLastTranscript && history.length === 0)} onClick={clearHistory}>Clear transcripts</button>
+              {history.length > 0 && (
+                <>
+                  <h3>Saved on this device</h3>
+                  {history.map((entry) => (
+                    <article key={entry.id} className="history-entry">
+                      <small>
+                        {new Date(entry.created_at * 1000).toLocaleString()}
+                      </small>
+                      <pre>{entry.text}</pre>
+                      <div className="transcript-actions">
+                        <button
+                          className="field-action"
+                          disabled={busy}
+                          onClick={() =>
+                            transcriptAction("copy_transcript", entry.id)
+                          }
+                        >
+                          Copy
+                        </button>
+                        <button
+                          className="field-action"
+                          disabled={busy || isRecording}
+                          onClick={() =>
+                            transcriptAction("reinsert_transcript", entry.id)
+                          }
+                        >
+                          Reinsert in 3 seconds
+                        </button>
+                      </div>
+                    </article>
+                  ))}
+                </>
+              )}
+              <button
+                className="field-action"
+                disabled={
+                  busy ||
+                  isRecording ||
+                  (!hasLastTranscript && history.length === 0)
+                }
+                onClick={clearHistory}
+              >
+                Clear transcripts
+              </button>
             </section>
           </section>
         </section>
@@ -1018,4 +1456,3 @@ function App() {
 }
 
 export default App;
-
