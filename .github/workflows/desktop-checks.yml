@@ -21,5 +21,8 @@ jobs:
           cache-dependency-path: stt-tauri/package-lock.json
       - run: npm ci
       - run: npm run build
+      - run: npm run test:ui
+        env:
+          TS_STT_BROWSER_CHANNEL: msedge
       - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - run: cargo clippy --locked --manifest-path src-tauri/Cargo.toml -- -D warnings

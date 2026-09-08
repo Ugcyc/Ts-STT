@@ -197,7 +197,7 @@ const OUTPUT_MODES = [
 ];
 
 function App() {
-  const MINI_SIZE = new LogicalSize(320, 180);
+  const MINI_SIZE = new LogicalSize(210, 58);
   const EXPANDED_SIZE = new LogicalSize(820, 700);
 
   const [config, setConfig] = useState<AppConfig>(defaultConfig);
@@ -292,6 +292,15 @@ function App() {
     };
     void applyWindowMode();
   }, [settingsOpen]);
+
+  useEffect(() => {
+    if (settingsOpen) return;
+    const message = Boolean(error || info);
+    const showPreview = Boolean(savedConfig.live_preview && preview);
+    const showRecovery = hasLastTranscript && !isRecording;
+    const height = 58 + (message ? 84 : 0) + (showPreview ? 84 : 0) + (showRecovery ? 36 : 0);
+    void getCurrentWindow().setSize(new LogicalSize(height > 58 ? 320 : 210,height)).catch(() => {});
+  },[settingsOpen,error,info,preview,savedConfig.live_preview,hasLastTranscript,isRecording]);
 
   const registerHotkey = async (hotkey: string) => {
     setError(null);

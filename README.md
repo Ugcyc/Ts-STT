@@ -2,15 +2,11 @@
 
 Local, streaming speech-to-text powered by NVIDIA Nemotron 3.5 ASR.
 
-The project contains:
-
-- `stt-tauri/`: the production Windows desktop app built with React, Rust, and
-  Tauri.
-- `python/`: the original prototype and a useful test harness for experiments.
+The desktop app lives in `stt-tauri/` and is built with React, Rust, and Tauri.
 
 ## Current Release
 
-Tauri app version: **0.3.2**
+Tauri app version: **0.4.0**
 
 The production app is fully local after its first model/runtime download. It
 uses the INT4 ONNX export of Nemotron 3.5 ASR Streaming and types, pastes, or
@@ -46,23 +42,15 @@ npm run build:win:nsis
 The installer is written under:
 
 ```text
-%LOCALAPPDATA%\stt-tauri-target\x86_64-pc-windows-msvc\release\bundle\nsis\
+%LOCALAPPDATA%\stt-tauri-target\release\bundle\nsis\
 ```
 
 See [stt-tauri/README.md](stt-tauri/README.md) for setup, architecture,
 troubleshooting, and build details.
-
-## Python Test App
-
-```powershell
-cd python
-.\.venv\Scripts\python.exe -m flow_stt
-```
-
-See [python/README.md](python/README.md) for Python setup details.
 
 ## Project Notes
 
 - [CHANGELOG.md](CHANGELOG.md) records completed releases.
 - [ROADMAP.md](ROADMAP.md) collects likely future work without committing to a
   specific schedule.
+

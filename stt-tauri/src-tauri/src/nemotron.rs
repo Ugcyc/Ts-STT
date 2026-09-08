@@ -491,6 +491,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
+    #[ignore = "requires installed Nemotron model and native runtime; run explicitly with TS_STT_TEST_MODEL_DIR and TS_STT_TEST_RUNTIME_DLL"]
     fn loads_installed_model_when_paths_are_provided() {
         let Ok(runtime) = std::env::var("TS_STT_TEST_RUNTIME_DLL") else {
             return;

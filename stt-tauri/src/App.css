@@ -1035,3 +1035,6 @@ select:focus {
 .transcript-actions { display: flex; gap: 8px; margin: 8px 0; }
 .history-entry { border-top: 1px solid #7774; padding: 12px 0; }
 .setting-row input[type="number"] { width: 90px; }
+.compact-stack { max-height: 100%; overflow: auto; }
+.app-shell.theme-light .compact-message, .app-shell.theme-light .compact-preview { background: #f5f5f5; color: #202329; }
+.app-shell.theme-light .compact-message.error { color: #a52318; }

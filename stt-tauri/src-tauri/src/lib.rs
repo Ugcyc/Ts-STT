@@ -507,8 +507,10 @@ fn model_worker(
                 report.inference_ms += report.finish_ms;
                 report.overflowed |= overflow.load(Ordering::SeqCst);
                 if let Some(writer) = output.take() {
-                    if let Err(e) = writer.finish(last_text.clone()) {
-                        warning = Some(e);
+                    if warning.is_none() {
+                        if let Err(e) = writer.finish(last_text.clone()) {
+                            warning = Some(e);
+                        }
                     }
                 }
                 let _ = response.send(Ok(WorkerResult {
