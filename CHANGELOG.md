@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reorganize the settings window into General, Output, Recognition,
+  Replacements, Transcripts, Speech model, and Diagnostics sections with a
+  settings search (Ctrl+F) and per-section unsaved-change markers.
 - Remove the unused Python prototype, launch scripts, dependencies, and tests.
 - Add optional destination protection, live preview, steadier live typing, CPU
   silence filtering and independently configurable silence stopping.

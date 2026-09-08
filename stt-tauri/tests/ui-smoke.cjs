@@ -114,24 +114,57 @@ let browser;
       },
     };
   });
+  const nav = (name) =>
+    page
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("button", { name, exact: true });
+  const check = (ok, message) => {
+    if (!ok) throw Error(message);
+  };
+
   await page.goto("http://127.0.0.1:1421");
   await page.getByRole("button", { name: "Open settings" }).click();
-  await page.getByText("No replacements added.", { exact: true }).waitFor();
-  if (
-    (await page
-      .getByRole("switch", { name: "Stop after silence" })
-      .getAttribute("aria-checked")) !== "false"
-  )
-    throw Error("Auto stop default not off");
-  if (
-    !(await page
-      .getByRole("switch", { name: "Stop after silence" })
-      .isDisabled())
-  )
-    throw Error("Auto stop must require VAD");
+
+  // The General section opens first and only shows its own rows.
+  await page.getByText("Keyboard shortcut", { exact: true }).waitFor();
+  check(
+    (await page.getByText("Apply replacements", { exact: true }).count()) === 0,
+    "Sections must not leak rows into each other",
+  );
+
+  // Recognition: auto stop defaults off and requires silence filtering.
+  await nav("Recognition").click();
+  const autoStop = page.getByRole("switch", { name: "Stop after silence" });
+  check(
+    (await autoStop.getAttribute("aria-checked")) === "false",
+    "Auto stop default not off",
+  );
+  check(await autoStop.isDisabled(), "Auto stop must require VAD");
   await page.getByRole("switch", { name: "Filter long silences" }).click();
-  await page.getByRole("switch", { name: "Stop after silence" }).click();
+  await autoStop.click();
   await page.getByLabel("Silence timeout (seconds)").fill("120");
+  await nav("Recognition").and(page.locator("[data-dirty]")).waitFor();
+
+  // Search filters rows across sections and links back to them.
+  const search = page.getByLabel("Search settings");
+  await search.fill("silence");
+  await page.getByText("matching settings", { exact: false }).waitFor();
+  await page.getByRole("switch", { name: "Stop after silence" }).waitFor();
+  check(
+    (await page.getByText("Keyboard shortcut", { exact: true }).count()) === 0,
+    "Search must hide unrelated settings",
+  );
+  await search.fill("typing");
+  await page.getByRole("switch", { name: "Live typing" }).waitFor();
+  await page.getByText("Hold back unfinished words", { exact: true }).waitFor();
+  await search.fill("zzzz-no-such-setting");
+  await page.getByRole("status").filter({ hasText: "No settings match" }).waitFor();
+  await search.fill("phrase");
+  await page.getByRole("button", { name: "Replacements ›", exact: true }).click();
+  await page.getByText("No replacements added.", { exact: true }).waitFor();
+  check((await search.inputValue()) === "", "Jumping must clear the search");
+
+  // Replacements: the list starts empty and can be edited and enabled.
   await page
     .getByRole("button", { name: "Add replacement", exact: true })
     .click();
@@ -143,12 +176,18 @@ let browser;
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await page.getByText("Settings saved.", { exact: true }).waitFor();
   const saved = await page.evaluate(() => window.__saved);
-  if (
-    saved.silence_timeout_secs !== 120 ||
-    saved.replacements.length !== 1 ||
-    !saved.replacements_enabled
-  )
-    throw Error("Settings not saved");
+  check(
+    saved.silence_timeout_secs === 120 &&
+      saved.replacements.length === 1 &&
+      saved.replacements_enabled,
+    "Settings not saved",
+  );
+  check(
+    (await page.locator(".nav-item[data-dirty]").count()) === 0,
+    "Unsaved marker must clear after saving",
+  );
+
+  // A failed paste keeps the transcript and shows the error in compact mode.
   await page.evaluate(() =>
     window.__emit("dictation-completed", {
       raw_text: "Recovered words",
@@ -163,20 +202,28 @@ let browser;
     await page.screenshot({
       path: path.join(process.env.TS_STT_SCREENSHOT_DIR, "ts-stt-compact.png"),
     });
+
+  // Transcripts: recovery actions live in their own section.
   await page.getByRole("button", { name: "Open settings" }).click();
+  await nav("Transcripts").click();
   await page.getByRole("button", { name: "Copy last", exact: true }).click();
-  if (!(await page.evaluate(() => window.__copied)))
-    throw Error("Recovery copy failed");
-  await page
-    .getByText("Your phrase replacements", { exact: true })
-    .scrollIntoViewIfNeeded();
-  if (process.env.TS_STT_SCREENSHOT_DIR)
+  check(await page.evaluate(() => window.__copied), "Recovery copy failed");
+  if (process.env.TS_STT_SCREENSHOT_DIR) {
+    await page.screenshot({
+      path: path.join(process.env.TS_STT_SCREENSHOT_DIR, "ts-stt-transcripts.png"),
+    });
+    await nav("Output").click();
     await page.screenshot({
       path: path.join(process.env.TS_STT_SCREENSHOT_DIR, "ts-stt-settings.png"),
     });
+    await search.fill("silence");
+    await page.screenshot({
+      path: path.join(process.env.TS_STT_SCREENSHOT_DIR, "ts-stt-search.png"),
+    });
+  }
   if (errors.length) throw Error(errors.join("\n"));
   console.log(
-    "PASS: optional defaults, VAD dependency, configurable timeout, empty replacement list/editing/save, failed-paste recovery, visible compact errors",
+    "PASS: sectioned settings, search filtering and jump links, unsaved markers, optional defaults, VAD dependency, configurable timeout, empty replacement list/editing/save, failed-paste recovery, visible compact errors",
   );
 })()
   .catch((e) => {

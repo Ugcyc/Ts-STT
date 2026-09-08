@@ -189,6 +189,12 @@ The native runtime is loaded dynamically from the managed app-data directory.
 
 ## Optional dictation controls
 
+Settings are grouped into sections in a left-hand navigation: General, Output,
+Recognition, Replacements, Transcripts, Speech model, and Diagnostics. The search
+box above the sections (or Ctrl+F) filters every setting by name, description, or
+related words and groups the matches under a heading that jumps to their section.
+A green dot on a section name marks unsaved changes.
+
 New options are off by default; the existing INT4 model and 560 ms chunk stay in use.
 Save settings while recording is stopped. Settings are captured at the start of each dictation.
 

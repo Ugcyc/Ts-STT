@@ -1112,3 +1112,252 @@ select:focus {
 .app-shell.theme-light .compact-message.error {
   color: #a52318;
 }
+
+/* Settings navigation and search */
+.mini-card.expanded {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.status-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  margin-top: 12px;
+}
+
+.status-strip .listen-btn {
+  width: auto;
+  flex: 1 1 220px;
+  margin-top: 0;
+}
+
+.status-strip .badge-row {
+  margin-top: 0;
+}
+
+.settings-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr);
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 2px;
+}
+
+.settings-search {
+  width: 100%;
+  margin-bottom: 8px;
+  padding-left: 34px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23dbe7ff' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='16.5' y1='16.5' x2='21' y2='21'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 11px center;
+}
+
+.settings-search::-webkit-search-cancel-button {
+  cursor: pointer;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  padding: 9px 12px;
+  background: transparent;
+  color: #c9ccd3;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+.nav-item:hover:not(:disabled) {
+  border-color: transparent;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.nav-item.active {
+  border-color: rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.nav-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--ok);
+  box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2);
+  flex-shrink: 0;
+}
+
+.nav-hint {
+  margin: 8px 0 0;
+  padding: 0 12px;
+  font-size: 0.7rem;
+  color: #7c8494;
+}
+
+.settings-content {
+  min-height: 0;
+  overflow: auto;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding-right: 4px;
+  padding-bottom: 6px;
+}
+
+.section-head h2 {
+  margin: 0;
+  font-size: 1.02rem;
+}
+
+.section-head p,
+.results-count {
+  margin: 4px 0 0;
+  font-size: 0.78rem;
+  color: #a1a1aa;
+}
+
+.results-count {
+  margin: 0;
+}
+
+.settings-group-title.jump {
+  width: fit-content;
+  border: 0;
+  border-radius: 6px;
+  padding: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.settings-group-title.jump:hover {
+  color: #ffffff;
+}
+
+.empty-state {
+  display: grid;
+  gap: 6px;
+  padding: 28px 16px;
+  border: 1px dashed rgba(255, 255, 255, 0.22);
+  border-radius: 12px;
+  text-align: center;
+  color: #a1a1aa;
+  font-size: 0.82rem;
+}
+
+.empty-state strong {
+  color: #f3f4f6;
+  font-size: 0.9rem;
+}
+
+.setting-row.column > .segmented,
+.setting-row.column > input,
+.replacement-list {
+  width: 100%;
+}
+
+.segmented.compact .segment {
+  padding: 7px 14px;
+}
+
+.replacement-list {
+  display: grid;
+  gap: 8px;
+}
+
+.replacement-list .replacement-row {
+  margin-bottom: 0;
+}
+
+.replacement-list .field-hint {
+  margin: 0;
+}
+
+.replacement-list > .field-action {
+  width: fit-content;
+}
+
+.transcript {
+  width: 100%;
+}
+
+.transcript > .field-action {
+  margin-top: 8px;
+}
+
+.app-shell.theme-light .nav-item {
+  color: #334155;
+}
+
+.app-shell.theme-light .nav-item:hover:not(:disabled) {
+  background: rgba(15, 23, 42, 0.06);
+}
+
+.app-shell.theme-light .nav-item.active {
+  border-color: rgba(15, 23, 42, 0.16);
+  background: rgba(15, 23, 42, 0.1);
+  color: #0f172a;
+}
+
+.app-shell.theme-light .settings-search {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%230f172a' stroke-width='2.2' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cline x1='16.5' y1='16.5' x2='21' y2='21'/%3E%3C/svg%3E");
+}
+
+.app-shell.theme-light .nav-hint,
+.app-shell.theme-light .section-head p,
+.app-shell.theme-light .results-count,
+.app-shell.theme-light .empty-state {
+  color: #52525b;
+}
+
+.app-shell.theme-light .empty-state {
+  border-color: rgba(15, 23, 42, 0.22);
+}
+
+.app-shell.theme-light .empty-state strong,
+.app-shell.theme-light .settings-group-title.jump:hover {
+  color: #0f172a;
+}
+
+@media (max-width: 720px) {
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    overflow: visible;
+  }
+
+  .settings-search {
+    flex-basis: 100%;
+    margin-bottom: 4px;
+  }
+
+  .nav-item {
+    width: auto;
+  }
+
+  .nav-hint {
+    display: none;
+  }
+}
