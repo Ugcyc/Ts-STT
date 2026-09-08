@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Remove the unused Python prototype, launch scripts, dependencies, and tests.
+  The native Tauri application is now the sole maintained implementation.
+
 - Add macOS support to the Nemotron backend: downloads osx-arm64/osx-x64
   ONNX Runtime GenAI and ONNX Runtime archives, extracts tar.gz/tgz, and
   loads `libonnxruntime-genai.dylib`.
