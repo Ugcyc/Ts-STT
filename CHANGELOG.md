@@ -3,7 +3,6 @@
 ## Unreleased
 
 - Remove the unused Python prototype, launch scripts, dependencies, and tests.
-
 - Add optional destination protection, live preview, steadier live typing, CPU
   silence filtering and independently configurable silence stopping.
 - Add an empty user-managed phrase replacement editor and opt-in local history,
@@ -55,4 +54,3 @@
 - Make Nemotron ONNX the default backend.
 - Add streaming transcription, live typing, English US default, and language
   tag cleanup.
-

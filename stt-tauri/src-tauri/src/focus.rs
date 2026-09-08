@@ -113,11 +113,11 @@ mod platform {
                 | (usize::from(GetAsyncKeyState(0x10) < 0) << 1)
                 | (usize::from(GetAsyncKeyState(0x12) < 0) << 2)
                 | (usize::from(GetAsyncKeyState(0x5B) < 0 || GetAsyncKeyState(0x5C) < 0) << 3);
-            let modifier_key = matches!(vk,0x10..=0x12 | 0x5B | 0x5C | 0xA0..=0xA5);
-            if !modifier_key
-                && !(vk == HOTKEY.load(Ordering::SeqCst)
-                    && modifiers == MODS.load(Ordering::SeqCst))
-            {
+            let modifier_key = matches!(vk, 0x10..=0x12 | 0x5B | 0x5C | 0xA0..=0xA5);
+            let is_hotkey = vk == HOTKEY.load(Ordering::SeqCst)
+                && modifiers == MODS.load(Ordering::SeqCst);
+            // Modifier presses and the dictation hotkey itself are not edits.
+            if !(modifier_key || is_hotkey) {
                 EPOCH.fetch_add(1, Ordering::SeqCst);
             }
         }

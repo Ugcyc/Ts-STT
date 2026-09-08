@@ -1,7 +1,7 @@
 name: Desktop checks
 on:
   push:
-    branches: [feature/optional-dictation-controls]
+    branches: [master]
   pull_request:
     paths: ['stt-tauri/**', '.github/workflows/desktop-checks.yml']
 permissions:

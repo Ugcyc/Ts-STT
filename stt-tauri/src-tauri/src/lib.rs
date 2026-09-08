@@ -754,11 +754,15 @@ impl AppState {
         let config = normalize_config(load_config_from_disk(&config_path)?);
         save_config_to_disk(&config_path, &config)?;
         let history_path = app_dir.join("history.json");
+        // A damaged history file must never prevent the app from starting.
         let history: Vec<TranscriptEntry> = if config.history_enabled && history_path.exists() {
-            let bytes = fs::read(&history_path)
-                .map_err(|e| format!("Cannot read transcript history: {e}"))?;
-            serde_json::from_slice(&bytes)
-                .map_err(|e| format!("Cannot parse transcript history: {e}"))?
+            fs::read(&history_path)
+                .map_err(|e| e.to_string())
+                .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()))
+                .unwrap_or_else(|e| {
+                    eprintln!("Ignoring unreadable transcript history: {e}");
+                    Vec::new()
+                })
         } else {
             Vec::new()
         };
@@ -1447,6 +1451,9 @@ fn stop_inner(state: &AppState) -> Result<TranscriptionResponse, String> {
     *state.report.lock().unwrap() = result.report;
     let mut warning = result.warning;
     let text = result.text;
+    // Only a recognition or output problem marks the transcript incomplete;
+    // a failed history write must not block insertion.
+    let complete = warning.is_none();
     // Retain successful recognition before any output side effect can fail.
     if !text.is_empty() {
         let now = std::time::SystemTime::now()
@@ -1472,7 +1479,7 @@ fn stop_inner(state: &AppState) -> Result<TranscriptionResponse, String> {
             }
         }
         // Never automatically insert a transcript known to be incomplete.
-        if warning.is_none() && !(config.live_typing && config.output_mode == "type") {
+        if complete && !(config.live_typing && config.output_mode == "type") {
             if let Err(e) = output_text(&config, &text, state.destination.lock().unwrap().clone()) {
                 warning = Some(e);
             }
@@ -1520,7 +1527,7 @@ fn save_config(state: State<'_, AppState>, config: AppConfig) -> Result<AppConfi
     let _operation = state
         .operation
         .try_lock()
-        .map_err(|_| "Operation lock poisoned.")?;
+        .map_err(|_| "Another operation is in progress.")?;
     if state.recorder.is_recording()? {
         return Err("Stop dictation before saving settings.".into());
     }
