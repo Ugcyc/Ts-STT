@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fix false "Audio processing fell behind" stops: the audio queue is now
+  bounded by duration (10 s, 60 s while the model loads) instead of by a
+  128-callback limit that filled in about a second.
+- Restyle the settings window closer to Windows 11: 4 px corners, 13 px
+  controls, tighter rows, Segoe UI Variable, and an accent bar on the active
+  section. Remove the recovery button from the compact overlay.
 - Reorganize the settings window into General, Output, Recognition,
   Replacements, Transcripts, Speech model, and Diagnostics sections with a
   settings search (Ctrl+F) and per-section unsaved-change markers.

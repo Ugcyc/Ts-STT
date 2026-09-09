@@ -202,11 +202,28 @@ struct WorkerResult {
     report: PerformanceReport,
 }
 
+/// Audio the worker may fall behind by before recording is stopped.
+const MAX_QUEUED_AUDIO_SECS: usize = 10;
+/// While a cold model loads, and until that backlog drains, allow far more.
+const MAX_QUEUED_AUDIO_WHILE_LOADING_SECS: usize = 60;
+
+fn audio_backlog_exceeded(queued_samples: usize, sample_rate: u32, loading: bool) -> bool {
+    let limit_secs = if loading {
+        MAX_QUEUED_AUDIO_WHILE_LOADING_SECS
+    } else {
+        MAX_QUEUED_AUDIO_SECS
+    };
+    queued_samples > sample_rate.max(1) as usize * limit_secs
+}
+
 #[derive(Clone)]
 struct ModelHandle {
-    tx: mpsc::SyncSender<ModelCommand>,
+    tx: mpsc::Sender<ModelCommand>,
     queued_samples: Arc<AtomicUsize>,
     overflow: Arc<AtomicBool>,
+    /// Set while the model loads and cleared once the backlog is back under
+    /// the normal limit, so startup audio is never mistaken for overload.
+    loading: Arc<AtomicBool>,
 }
 impl ModelHandle {
     fn unload(&self) -> Result<(), String> {
@@ -217,16 +234,21 @@ impl ModelHandle {
         rx.recv().map_err(|_| "Worker unavailable.".into())
     }
     fn new() -> Self {
-        let (tx, rx) = mpsc::sync_channel(128);
+        // The queue is bounded by audio duration (see `push`), not by message
+        // count: microphone callbacks arrive every few milliseconds.
+        let (tx, rx) = mpsc::channel();
         let queued_samples = Arc::new(AtomicUsize::new(0));
         let overflow = Arc::new(AtomicBool::new(false));
+        let loading = Arc::new(AtomicBool::new(false));
         let q = queued_samples.clone();
         let o = overflow.clone();
-        thread::spawn(move || model_worker(rx, q, o));
+        let l = loading.clone();
+        thread::spawn(move || model_worker(rx, q, o, l));
         Self {
             tx,
             queued_samples,
             overflow,
+            loading,
         }
     }
     #[allow(clippy::too_many_arguments)]
@@ -241,6 +263,7 @@ impl ModelHandle {
     ) -> Result<(), String> {
         let (tx, rx) = mpsc::channel();
         self.overflow.store(false, Ordering::SeqCst);
+        self.loading.store(true, Ordering::SeqCst);
         self.tx
             .send(ModelCommand::Start {
                 model_path,
@@ -256,17 +279,24 @@ impl ModelHandle {
             .map_err(|_| "Nemotron worker did not respond.".to_string())?
     }
     fn push(&self, samples: Vec<f32>, sample_rate: u32) {
+        if self.overflow.load(Ordering::SeqCst) {
+            return;
+        }
         let count = samples.len();
-        // Bound both callback count and audio duration. Never block the audio callback.
+        // Bound queued audio by duration. Never block the audio callback.
         let queued = self.queued_samples.fetch_add(count, Ordering::SeqCst);
-        if queued + count > sample_rate as usize * 10 || self.overflow.load(Ordering::SeqCst) {
+        if audio_backlog_exceeded(
+            queued + count,
+            sample_rate,
+            self.loading.load(Ordering::SeqCst),
+        ) {
             self.queued_samples.fetch_sub(count, Ordering::SeqCst);
             self.overflow.store(true, Ordering::SeqCst);
             return;
         }
         if self
             .tx
-            .try_send(ModelCommand::Audio {
+            .send(ModelCommand::Audio {
                 samples,
                 sample_rate,
             })
@@ -277,9 +307,7 @@ impl ModelHandle {
         }
     }
     fn fault(&self, error: String) {
-        if self.tx.try_send(ModelCommand::Fault(error)).is_err() {
-            self.overflow.store(true, Ordering::SeqCst);
-        }
+        let _ = self.tx.send(ModelCommand::Fault(error));
     }
     fn finish(&self) -> Result<WorkerResult, String> {
         let (tx, rx) = mpsc::channel();
@@ -295,6 +323,7 @@ fn model_worker(
     rx: mpsc::Receiver<ModelCommand>,
     queued: Arc<AtomicUsize>,
     overflow: Arc<AtomicBool>,
+    loading: Arc<AtomicBool>,
 ) {
     let mut cached: Option<(PathBuf, PathBuf, NemotronModel)> = None;
     let mut session: Option<NemotronSession> = None;
@@ -407,6 +436,7 @@ fn model_worker(
                         }
                     }
                     Err(e) => {
+                        loading.store(false, Ordering::SeqCst);
                         warning = Some(e.clone());
                         let _ = handle.emit("dictation-warning", e);
                         let _ = handle.emit("dictation-auto-stop", current_session);
@@ -419,9 +449,14 @@ fn model_worker(
                 samples,
                 sample_rate,
             } => {
-                queued.fetch_sub(samples.len(), Ordering::SeqCst);
-                let queue_ms =
-                    queued.load(Ordering::SeqCst) as u64 * 1000 / sample_rate.max(1) as u64;
+                let remaining = queued.fetch_sub(samples.len(), Ordering::SeqCst) - samples.len();
+                if session.is_some()
+                    && loading.load(Ordering::SeqCst)
+                    && !audio_backlog_exceeded(remaining, sample_rate, false)
+                {
+                    loading.store(false, Ordering::SeqCst);
+                }
+                let queue_ms = remaining as u64 * 1000 / sample_rate.max(1) as u64;
                 report.max_queue_ms = report.max_queue_ms.max(queue_ms);
                 let audio = resampler.push(&samples, sample_rate);
                 report.audio_seconds += audio.len() as f64 / 16_000.0;
@@ -1843,6 +1878,17 @@ mod tests {
         });
         assert!(!c.auto_stop_enabled && !c.live_typing);
         assert_eq!(c.silence_timeout_secs, 60.0);
+    }
+    #[test]
+    fn audio_backlog_limit_is_measured_in_seconds_not_callbacks() {
+        // 1.3 s of 10 ms callbacks used to overflow a 128-message queue.
+        assert!(!audio_backlog_exceeded(48_000 * 13 / 10, 48_000, false));
+        assert!(!audio_backlog_exceeded(48_000 * 10, 48_000, false));
+        assert!(audio_backlog_exceeded(48_000 * 10 + 1, 48_000, false));
+        // A cold model load may hold far more audio before giving up.
+        assert!(!audio_backlog_exceeded(48_000 * 45, 48_000, true));
+        assert!(audio_backlog_exceeded(48_000 * 61, 48_000, true));
+        assert!(audio_backlog_exceeded(11, 0, false));
     }
     #[test]
     fn checksum_rejects_corrupt_existing_files() {

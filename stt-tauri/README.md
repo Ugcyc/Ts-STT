@@ -226,7 +226,8 @@ Save settings while recording is stopped. Settings are captured at the start of 
   lets you switch to the intended field during the countdown.
 
 Typing runs on a separate worker with a coalescing update slot. Audio input has a
-bounded queue; overflow stops recording and marks the recovered text incomplete.
+queue bounded by duration: 10 seconds of backlog normally, 60 seconds while a cold
+model loads. Exceeding it stops recording and marks the recovered text incomplete.
 Audio always processes during capture, even when live output is disabled, avoiding
 an unbounded recording buffer. Errors appear in the compact overlay. Performance
 reports measure load time, first-text delay, inference/finalization time, maximum
