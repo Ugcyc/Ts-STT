@@ -6,7 +6,7 @@ The desktop app lives in `stt-tauri/` and is built with React, Rust, and Tauri.
 
 ## Current Release
 
-Tauri app version: **0.4.0**
+Tauri app version: **0.5.0**
 
 The production app is fully local after its first model/runtime download. It
 uses the INT4 ONNX export of Nemotron 3.5 ASR Streaming and types, pastes, or

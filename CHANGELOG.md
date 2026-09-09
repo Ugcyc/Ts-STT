@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 (2026-09-09)
 
 - Fix false "Audio processing fell behind" stops: the audio queue is now
   bounded by duration (10 s, 60 s while the model loads) instead of by a

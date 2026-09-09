@@ -1421,7 +1421,7 @@ function App() {
             <strong>Backend:</strong> Nemotron 3.5 ASR Streaming ONNX INT4
           </div>
           <div>
-            <strong>App version:</strong> 0.4.0
+            <strong>App version:</strong> 0.5.0
           </div>
         </div>
       ),
