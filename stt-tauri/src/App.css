@@ -1069,14 +1069,8 @@ select:focus {
   box-sizing: border-box;
 }
 .compact-stack > .compact-message,
-.compact-stack > .compact-preview,
-.compact-stack > .field-action {
+.compact-stack > .compact-preview {
   width: 100%;
-}
-.compact-stack > .field-action {
-  min-width: 0;
-  padding: 7px 10px;
-  font-size: 12px;
 }
 .compact-message,
 .compact-preview {

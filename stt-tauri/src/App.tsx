@@ -433,12 +433,7 @@ function App() {
     if (settingsOpen) return;
     const message = Boolean(error || info);
     const showPreview = Boolean(savedConfig.live_preview && preview);
-    const showRecovery = hasLastTranscript && !isRecording;
-    const height =
-      58 +
-      (message ? 84 : 0) +
-      (showPreview ? 84 : 0) +
-      (showRecovery ? 36 : 0);
+    const height = 58 + (message ? 84 : 0) + (showPreview ? 84 : 0);
     void getCurrentWindow()
       .setSize(new LogicalSize(height > 58 ? 320 : 210, height))
       .catch(() => {});
@@ -448,9 +443,15 @@ function App() {
     info,
     preview,
     savedConfig.live_preview,
-    hasLastTranscript,
-    isRecording,
   ]);
+
+  // Informational notes are transient in the overlay; errors stay until the
+  // next action clears them.
+  useEffect(() => {
+    if (settingsOpen || !info || error) return;
+    const timer = window.setTimeout(() => setInfo(null), 4000);
+    return () => window.clearTimeout(timer);
+  }, [settingsOpen, info, error]);
 
   const registerHotkey = async (hotkey: string) => {
     setError(null);
@@ -1505,15 +1506,6 @@ function App() {
             <div className="compact-preview" aria-live="polite">
               {preview}
             </div>
-          )}
-          {hasLastTranscript && !isRecording && (
-            <button
-              className="field-action"
-              disabled={busy}
-              onClick={() => transcriptAction("copy_transcript")}
-            >
-              Copy last dictation
-            </button>
           )}
         </div>
       ) : (
